@@ -13,7 +13,7 @@ TagManager:
   - UI
   - MapView
   - BaseView
-  - 
+  - District
   - 
   - 
   - 
@@ -43,6 +43,12 @@ TagManager:
     locked: 0
   - name: Base
     uniqueID: 2409797519
+    locked: 0
+  - name: MapOverlay
+    uniqueID: 123116939
+    locked: 0
+  - name: DistrictOverlay
+    uniqueID: 3657224139
     locked: 0
   m_RenderingLayers:
   - Default

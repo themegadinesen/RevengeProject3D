@@ -18,6 +18,8 @@ MonoBehaviour:
   requiredINT: 4
   requiredSTR: 1
   requiredAGI: 1
+  requiredDomain: 0
+  requiredBuilding: {fileID: 0}
   duration: 30
   behavior: 0
   chaosOnSuccess: 3

@@ -8,28 +8,23 @@ public class MissionManager : MonoBehaviour
     [SerializeField] private GameState   gameState;
     [SerializeField] private AgentRoster agentRoster;
 
+    [Header("Base Progression (optional)")]
+    [Tooltip("Leave empty if base progression is not yet set up.")]
+    [SerializeField] private BaseProgressionManager baseProgression;
+
     [Header("Score → Success Chance")]
-    [Tooltip("Success chance when team coverage = 0%.")]
     [Range(0f, 1f)]
     [SerializeField] private float minSuccessChance = 0.05f;
-
-    [Tooltip("Success chance when team coverage = 100%.")]
     [Range(0f, 1f)]
     [SerializeField] private float maxSuccessChance = 0.95f;
 
     [Header("Score → Duration")]
-    [Tooltip("Duration multiplier at worst coverage (>1 = slower).")]
     [SerializeField] private float worstDurationMult = 1.5f;
-
-    [Tooltip("Duration multiplier at best coverage (<1 = faster).")]
-    [SerializeField] private float bestDurationMult = 0.8f;
+    [SerializeField] private float bestDurationMult  = 0.8f;
 
     [Header("Score → Rewards")]
-    [Tooltip("Reward multiplier at worst coverage.")]
     [SerializeField] private float worstRewardMult = 0.5f;
-
-    [Tooltip("Reward multiplier at best coverage.")]
-    [SerializeField] private float bestRewardMult = 1.5f;
+    [SerializeField] private float bestRewardMult  = 1.5f;
 
     // ── Events ────────────────────────────────────────────────────────
     public event Action<ActiveMission> OnMissionStarted;
@@ -62,6 +57,14 @@ public class MissionManager : MonoBehaviour
         return null;
     }
 
+    public int GetActiveMissionCountForDistrict(RuntimeDistrict district)
+    {
+        int count = 0;
+        for (int i = 0; i < activeMissions.Count; i++)
+            if (activeMissions[i].District == district) count++;
+        return count;
+    }
+
     // ── Scoring (public — UI calls these for live preview) ────────────
     public static float CalculateMissionScore(
         List<RuntimeAgent> team, MissionData mission)
@@ -82,50 +85,46 @@ public class MissionManager : MonoBehaviour
         float sum   = 0f;
         int   count = 0;
 
-        if (m.requiredINT > 0)
-        {
-            sum += Mathf.Clamp01((float)tINT / m.requiredINT);
-            count++;
-        }
-        if (m.requiredSTR > 0)
-        {
-            sum += Mathf.Clamp01((float)tSTR / m.requiredSTR);
-            count++;
-        }
-        if (m.requiredAGI > 0)
-        {
-            sum += Mathf.Clamp01((float)tAGI / m.requiredAGI);
-            count++;
-        }
+        if (m.requiredINT > 0) { sum += Mathf.Clamp01((float)tINT / m.requiredINT); count++; }
+        if (m.requiredSTR > 0) { sum += Mathf.Clamp01((float)tSTR / m.requiredSTR); count++; }
+        if (m.requiredAGI > 0) { sum += Mathf.Clamp01((float)tAGI / m.requiredAGI); count++; }
 
         return count > 0 ? sum / count : 1f;
     }
 
-    /// <summary>UI calls this to preview success chance for a given score.</summary>
-    public float GetSuccessChance(float score) =>
-        Mathf.Lerp(minSuccessChance, maxSuccessChance, score);
+    public float GetSuccessChance(float score)
+    {
+        float baseChance = Mathf.Lerp(minSuccessChance, maxSuccessChance, score);
+        float bonus = baseProgression != null ? baseProgression.TotalMissionSuccessBonus : 0f;
+        return Mathf.Clamp01(baseChance + bonus);
+    }
 
-    /// <summary>UI calls this to preview effective duration.</summary>
     public float GetDurationMultiplier(float score) =>
         Mathf.Lerp(worstDurationMult, bestDurationMult, score);
 
-    /// <summary>UI calls this to preview reward scaling.</summary>
-    public float GetRewardMultiplier(float score) =>
-        Mathf.Lerp(worstRewardMult, bestRewardMult, score);
+    public float GetRewardMultiplier(float score)
+    {
+        float baseMult = Mathf.Lerp(worstRewardMult, bestRewardMult, score);
+        float bonus = baseProgression != null ? baseProgression.TotalMoneyGainBonus : 0f;
+        return baseMult + bonus;
+    }
 
-    // ── Launch ────────────────────────────────────────────────────────
-    /// <summary>
-    /// Attempts to launch a mission with the given team.
-    /// Returns false if validation fails.
-    /// </summary>
+    // ── Launch (backward-compatible overload) ─────────────────────────
     public bool TryLaunchMission(MissionData mission, List<RuntimeAgent> team)
+        => TryLaunchMission(mission, team, null);
+
+    public bool TryLaunchMission(
+        MissionData mission, List<RuntimeAgent> team, RuntimeDistrict district)
     {
         if (mission == null || team == null || team.Count == 0) return false;
-        if (gameState.IsRunEnded)    return false;
+        if (gameState.IsRunEnded)     return false;
         if (IsMissionActive(mission)) return false;
         if (gameState.Money < mission.moneyCost) return false;
 
-        // Validate every selected agent is actually available.
+        // Domain / building gate.
+        if (baseProgression != null && !baseProgression.AreMissionRequirementsMet(mission))
+            return false;
+
         foreach (var agent in team)
             if (agent.Status != AgentStatus.Available) return false;
 
@@ -136,14 +135,14 @@ public class MissionManager : MonoBehaviour
         foreach (var agent in team)
             agentRoster.SetBusy(agent);
 
-        // Compute score and derived multipliers.
-        float score    = CalculateMissionScore(team, mission);
-        float rewMult  = GetRewardMultiplier(score);
+        // Compute score.
+        float score   = CalculateMissionScore(team, mission);
+        float rewMult = GetRewardMultiplier(score);
 
-        // Duration 0 = instant resolve (backward-compatible).
+        // Instant resolve.
         if (mission.duration <= 0f)
         {
-            ResolveInstant(mission, team, score, rewMult);
+            ResolveInstant(mission, team, score, rewMult, district);
             return true;
         }
 
@@ -152,12 +151,13 @@ public class MissionManager : MonoBehaviour
 
         var active = new ActiveMission
         {
-            Data               = mission,
-            Duration           = effectiveDuration,
-            TimeRemaining      = effectiveDuration,
-            AssignedAgents     = new List<RuntimeAgent>(team),
-            MissionScore       = score,
-            RewardMultiplier   = rewMult,
+            Data                 = mission,
+            District             = district,
+            Duration             = effectiveDuration,
+            TimeRemaining        = effectiveDuration,
+            AssignedAgents       = new List<RuntimeAgent>(team),
+            MissionScore         = score,
+            RewardMultiplier     = rewMult,
             SlowBurnChaosApplied = 0f
         };
 
@@ -174,7 +174,7 @@ public class MissionManager : MonoBehaviour
             ActiveMission m = activeMissions[i];
             m.TimeRemaining -= Time.deltaTime;
 
-            // Slow-burn: drip chaos proportionally.
+            // Slow-burn: drip chaos to the district (or global fallback).
             if (m.Data.behavior == MissionBehavior.SlowBurn)
             {
                 float totalChaos = m.Data.chaosOnSuccess;
@@ -182,7 +182,12 @@ public class MissionManager : MonoBehaviour
                 {
                     float tick = (totalChaos / m.Duration) * Time.deltaTime;
                     tick = Mathf.Min(tick, totalChaos - m.SlowBurnChaosApplied);
-                    gameState.AddChaos(tick);
+
+                    if (m.District != null)
+                        m.District.AddChaos(tick);
+                    else
+                        gameState.AddChaos(tick);
+
                     m.SlowBurnChaosApplied += tick;
                 }
             }
@@ -198,79 +203,92 @@ public class MissionManager : MonoBehaviour
     // ── Resolution ────────────────────────────────────────────────────
     private void ResolveInstant(
         MissionData mission, List<RuntimeAgent> team,
-        float score, float rewardMult)
+        float score, float rewardMult, RuntimeDistrict district)
     {
-        float chance = GetSuccessChance(score);
+        float chance  = GetSuccessChance(score);
         bool  success = UnityEngine.Random.value <= chance;
 
-        MissionResult result = ApplyOutcome(mission, team, success, score, rewardMult);
+        MissionResult result = ApplyOutcome(
+            mission, team, success, score, rewardMult, district);
         OnMissionResolved?.Invoke(result);
     }
 
     private void ResolveTimed(ActiveMission active)
     {
-        float chance = GetSuccessChance(active.MissionScore);
+        float chance  = GetSuccessChance(active.MissionScore);
         bool  success = UnityEngine.Random.value <= chance;
 
         MissionResult result = ApplyOutcome(
             active.Data, active.AssignedAgents,
-            success, active.MissionScore, active.RewardMultiplier);
-
+            success, active.MissionScore, active.RewardMultiplier,
+            active.District);
         OnMissionResolved?.Invoke(result);
     }
 
     private MissionResult ApplyOutcome(
         MissionData mission, List<RuntimeAgent> team,
-        bool success, float score, float rewardMult)
+        bool success, float score, float rewardMult,
+        RuntimeDistrict district)
     {
         var result = new MissionResult
         {
-            Data    = mission,
-            Success = success,
-            Score   = score,
+            Data     = mission,
+            District = district,
+            Success  = success,
+            Score    = score,
         };
 
         if (success)
         {
-            // Instant missions apply chaos now; SlowBurn already applied during ticking.
+            // Chaos → district (or global fallback). SlowBurn already dripped.
             if (mission.behavior == MissionBehavior.Instant)
-                gameState.AddChaos(mission.chaosOnSuccess);
+            {
+                if (district != null) district.AddChaos(mission.chaosOnSuccess);
+                else                  gameState.AddChaos(mission.chaosOnSuccess);
+            }
 
-            gameState.AddCure(mission.cureOnSuccess);
+            // Cure → district (or global fallback).
+            if (district != null) district.AddCure(mission.cureOnSuccess);
+            else                  gameState.AddCure(mission.cureOnSuccess);
 
+            // Money is always global.
             int moneyReward = Mathf.RoundToInt(mission.moneyOnSuccess * rewardMult);
             gameState.AddMoney(moneyReward);
             result.ActualMoneyReward = moneyReward;
 
-            // All agents return safely.
             foreach (var agent in team)
                 agentRoster.SetAvailable(agent);
         }
         else
         {
-            gameState.AddChaos(mission.chaosOnFailure);
-            gameState.AddCure(mission.cureOnFailure);
-
-            // Randomly lose agents from the team.
-            int toLose      = Mathf.Min(mission.agentsLostOnFailure, team.Count);
-            var lostAgents  = new List<RuntimeAgent>();
-            var candidates  = new List<RuntimeAgent>(team);
-
-            for (int i = 0; i < toLose; i++)
+            // Failure effects → district (or global fallback).
+            if (district != null)
             {
-                int idx  = UnityEngine.Random.Range(0, candidates.Count);
-                var lost = candidates[idx];
-                agentRoster.LoseAgent(lost);
-                lostAgents.Add(lost);
-                candidates.RemoveAt(idx);
+                district.AddChaos(mission.chaosOnFailure);
+                district.AddCure(mission.cureOnFailure);
+            }
+            else
+            {
+                gameState.AddChaos(mission.chaosOnFailure);
+                gameState.AddCure(mission.cureOnFailure);
             }
 
-            // Return survivors.
-            foreach (var agent in candidates)
+            // Return surviving agents, randomly lose some.
+            var lostAgents = new List<RuntimeAgent>();
+            var teamCopy   = new List<RuntimeAgent>(team);
+
+            for (int j = 0; j < mission.agentsLostOnFailure && teamCopy.Count > 0; j++)
+            {
+                int idx = UnityEngine.Random.Range(0, teamCopy.Count);
+                lostAgents.Add(teamCopy[idx]);
+                agentRoster.LoseAgent(teamCopy[idx]);
+                teamCopy.RemoveAt(idx);
+            }
+
+            foreach (var agent in teamCopy)
                 agentRoster.SetAvailable(agent);
 
-            result.LostAgents       = lostAgents;
-            result.ActualMoneyReward = 0;
+            result.LostAgents = lostAgents;
         }
 
         return result;

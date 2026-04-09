@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0598eb551d5950d41bd43fa7ecf45482, type: 3}
+  m_Name: District_Sand
+  m_EditorClassIdentifier: Assembly-CSharp::DistrictData
+  districtName: Sand
+  loreText: big desert
+  industryFocus: General
+  peopleAffectedUnlockThreshold: 3000
+  populationWeight: 10
+  startingChaos: 0
+  startingCure: 0
+  missions:
+  - {fileID: 11400000, guid: 606a16ca84173c44381e4992664c68b8, type: 2}
+  - {fileID: 11400000, guid: 3092ddd778c86a6408cd8dfac18e94eb, type: 2}

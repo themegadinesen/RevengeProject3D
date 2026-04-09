@@ -1,3 +1,4 @@
+// Assets/Scripts/Camera/ActSwitcher.cs
 using UnityEngine;
 
 /// <summary>
@@ -9,6 +10,10 @@ public class ActSwitcher : MonoBehaviour
     [Header("References")]
     [SerializeField] private CameraController cameraController;
     [SerializeField] private ViewManager viewManager;
+
+    [Header("Base Progression")]
+    [Tooltip("Optional. If assigned, progression activates on Act 2 switch.")]
+    [SerializeField] private BaseProgressionManager baseProgression;
 
     [Header("Act 1")]
     [SerializeField] private GameObject act1Base;
@@ -31,8 +36,6 @@ public class ActSwitcher : MonoBehaviour
         // If currently in base view, kick back to map first.
         if (viewManager.CurrentState == ViewManager.ViewState.Base)
         {
-            // Force map view — the player will see the zoom-blur out,
-            // then next time they zoom in they'll enter Act 2's base.
             cameraController.GoToMapView();
         }
 
@@ -46,5 +49,9 @@ public class ActSwitcher : MonoBehaviour
         // Swap config if provided.
         if (act2Config != null)
             cameraController.SetConfig(act2Config);
+
+        // Activate base progression.
+        if (baseProgression != null)
+            baseProgression.ActivateProgression();
     }
 }

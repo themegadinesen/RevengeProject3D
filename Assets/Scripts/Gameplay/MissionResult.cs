@@ -6,9 +6,10 @@ using System.Collections.Generic;
 /// </summary>
 public class MissionResult
 {
-    public MissionData Data;
-    public bool Success;
-    public float Score;
-    public int ActualMoneyReward;
+    public MissionData      Data;
+    public RuntimeDistrict  District;       // which district was affected (null = global)
+    public bool             Success;
+    public float            Score;
+    public int              ActualMoneyReward;
     public List<RuntimeAgent> LostAgents;   // null or empty on success
 }

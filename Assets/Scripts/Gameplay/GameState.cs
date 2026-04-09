@@ -21,6 +21,10 @@ public class GameState : MonoBehaviour
     [Header("People Affected")]
     [SerializeField] private float peopleGrowthMultiplier = 0.1f;
 
+    [Header("District Integration")]
+    [Tooltip("When true, DistrictManager drives Chaos/Cure/People. Internal ticking is disabled.")]
+    [SerializeField] private bool districtDriven = false;
+
     // ── Runtime State ─────────────────────────────────────────────────
     public float Chaos          { get; private set; }
     public float Cure           { get; private set; }
@@ -52,10 +56,14 @@ public class GameState : MonoBehaviour
     {
         if (IsRunEnded) return;
 
-        TickChaosDecay();
-        TickCureFill();
-        TickPeopleAffected();
-        OnStateChanged?.Invoke();
+        if (!districtDriven)
+        {
+            TickChaosDecay();
+            TickCureFill();
+            TickPeopleAffected();
+            OnStateChanged?.Invoke();
+        }
+        // When districtDriven, DistrictManager calls SetDistrictValues().
     }
 
     // ── Public Mutators ───────────────────────────────────────────────
@@ -74,13 +82,25 @@ public class GameState : MonoBehaviour
         Money += amount;
     }
 
+    /// <summary>
+    /// Called by DistrictManager each frame when districtDriven is true.
+    /// Sets aggregated values and fires the state-changed event.
+    /// </summary>
+    public void SetDistrictValues(float chaos, float cure, int people)
+    {
+        Chaos          = Mathf.Clamp(chaos, 0f, maxChaos);
+        Cure           = Mathf.Clamp(cure,  0f, maxCure);
+        PeopleAffected = people;
+        OnStateChanged?.Invoke();
+    }
+
     public void EndRun()
     {
         IsRunEnded = true;
         OnStateChanged?.Invoke();
     }
 
-    // ── Tick Logic ────────────────────────────────────────────────────
+    // ── Tick Logic (only used when NOT districtDriven) ────────────────
     private void TickChaosDecay()
     {
         if (Chaos > 0f)

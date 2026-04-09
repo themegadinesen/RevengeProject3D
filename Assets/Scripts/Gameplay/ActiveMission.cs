@@ -8,13 +8,14 @@ using System.Collections.Generic;
 [System.Serializable]
 public class ActiveMission
 {
-    public MissionData Data;
-    public float Duration;                      // effective (after score multiplier)
-    public float TimeRemaining;
-    public List<RuntimeAgent> AssignedAgents;   // was: int AssignedAgents
-    public float MissionScore;                  // 0–1
-    public float RewardMultiplier;              // computed at launch
-    public float SlowBurnChaosApplied;
+    public MissionData      Data;
+    public RuntimeDistrict  District;               // which district this runs in (null = global fallback)
+    public float            Duration;               // effective (after score multiplier)
+    public float            TimeRemaining;
+    public List<RuntimeAgent> AssignedAgents;
+    public float            MissionScore;           // 0–1
+    public float            RewardMultiplier;       // computed at launch
+    public float            SlowBurnChaosApplied;
 
     /// <summary>0 → 1 progress.</summary>
     public float Progress => Duration > 0f ? 1f - (TimeRemaining / Duration) : 1f;

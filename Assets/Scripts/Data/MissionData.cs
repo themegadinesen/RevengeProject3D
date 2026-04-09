@@ -28,6 +28,12 @@ public class MissionData : ScriptableObject
     [Tooltip("Total AGI the assigned team should meet.")]
     [Min(0)] public int requiredAGI;
 
+    [Header("Infrastructure Requirements")]
+    [Tooltip("Domain that must be unlocked to launch this mission. None = no requirement.")]
+    public InfrastructureDomain requiredDomain = InfrastructureDomain.None;
+    [Tooltip("Specific building that must be Built to launch this mission. Leave empty for no requirement.")]
+    public BuildingData requiredBuilding;
+
     [Header("Duration & Behavior")]
     [Tooltip("Mission duration in seconds. 0 = resolves instantly.")]
     [Min(0f)] public float duration = 30f;

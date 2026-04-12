@@ -1,10 +1,12 @@
-// Assets/Scripts/Gameplay/RuntimeAgent.cs
+using UnityEngine;
 
-public enum AgentStatus { Available, Busy, Lost }
+public enum AgentStatus
+{
+    Available,
+    Busy,
+    Lost
+}
 
-/// <summary>
-/// Mutable runtime instance of an agent. Plain C# — not a MonoBehaviour.
-/// </summary>
 [System.Serializable]
 public class RuntimeAgent
 {
@@ -16,12 +18,27 @@ public class RuntimeAgent
     public AgentStatus Status;
 
     public RuntimeAgent(AgentData template)
+        : this(
+            template,
+            template != null ? template.agentName : "Unnamed Agent",
+            template != null ? template.baseINT : 1,
+            template != null ? template.baseSTR : 1,
+            template != null ? template.baseAGI : 1)
+    {
+    }
+
+    public RuntimeAgent(
+        AgentData template,
+        string agentName,
+        int intelligence,
+        int strength,
+        int agility)
     {
         Template = template;
-        Name     = template.agentName;
-        INT      = template.baseINT;
-        STR      = template.baseSTR;
-        AGI      = template.baseAGI;
-        Status   = AgentStatus.Available;
+        Name = string.IsNullOrWhiteSpace(agentName) ? "Unnamed Agent" : agentName;
+        INT = Mathf.Max(1, intelligence);
+        STR = Mathf.Max(1, strength);
+        AGI = Mathf.Max(1, agility);
+        Status = AgentStatus.Available;
     }
 }

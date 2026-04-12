@@ -6,9 +6,24 @@ public class DistrictManager : MonoBehaviour
 {
     [SerializeField] private GameState gameState;
 
+    private bool hasLoggedMissingHeatConfig;
+
+    private static readonly DistrictResponseTier FallbackResponseTier = new()
+    {
+        state = DistrictResponseState.Calm,
+        heatThreshold = 0f,
+        successChancePenalty = 0f,
+        bonusAgentLossChance = 0f,
+        missionCureMultiplier = 1f,
+        investigationPressurePerSecond = 0f
+    };
+
     [Header("Districts")]
     [Tooltip("Add all districts here. First district starts unlocked.")]
     [SerializeField] private DistrictData[] allDistricts;
+
+    [Header("Heat")]
+    [SerializeField] private DistrictHeatConfig heatConfig;
 
     [Header("Local Simulation Caps")]
     [SerializeField] private float maxLocalChaos = 100f;
@@ -34,6 +49,7 @@ public class DistrictManager : MonoBehaviour
 
     public float MaxLocalChaos => maxLocalChaos;
     public float MaxLocalCure  => maxLocalCure;
+    public float MaxLocalHeat  => heatConfig != null ? heatConfig.maxHeat : 100f;
 
     // ── Lifecycle ─────────────────────────────────────────────────────
     private void Start()
@@ -41,12 +57,20 @@ public class DistrictManager : MonoBehaviour
         runtimeDistricts = new RuntimeDistrict[allDistricts.Length];
         for (int i = 0; i < allDistricts.Length; i++)
             runtimeDistricts[i] = new RuntimeDistrict(
-                allDistricts[i], maxLocalChaos, maxLocalCure);
+                allDistricts[i], maxLocalChaos, maxLocalCure, MaxLocalHeat);
 
         if (runtimeDistricts.Length > 0)
         {
             runtimeDistricts[0].IsUnlocked = true;
             SelectedDistrict = runtimeDistricts[0];
+        }
+
+        if (heatConfig == null && !hasLoggedMissingHeatConfig)
+        {
+            Debug.LogWarning(
+                "DistrictManager: Heat Config is not assigned. District heat will still store values, but response penalties and investigation pressure will stay at zero.",
+                this);
+            hasLoggedMissingHeatConfig = true;
         }
     }
 
@@ -75,6 +99,62 @@ public class DistrictManager : MonoBehaviour
     {
         var rd = GetRuntimeDistrict(data);
         return rd != null && rd.IsUnlocked;
+    }
+
+    public DistrictResponseTier GetResponseTier(RuntimeDistrict district)
+    {
+        if (district == null || heatConfig == null)
+            return FallbackResponseTier;
+
+        DistrictResponseTier tier = heatConfig.GetTierForHeat(district.LocalHeat);
+        return tier ?? FallbackResponseTier;
+    }
+
+    public DistrictResponseState GetResponseState(RuntimeDistrict district)
+    {
+        return GetResponseTier(district).state;
+    }
+
+    public float GetSuccessChancePenalty(RuntimeDistrict district)
+    {
+        return district == null ? 0f : GetResponseTier(district).successChancePenalty;
+    }
+
+    public float GetBonusAgentLossChance(RuntimeDistrict district)
+    {
+        return district == null ? 0f : GetResponseTier(district).bonusAgentLossChance;
+    }
+
+    public float GetMissionCureMultiplier(RuntimeDistrict district)
+    {
+        return district == null ? 1f : Mathf.Max(0f, GetResponseTier(district).missionCureMultiplier);
+    }
+
+    public float GetInvestigationPressure(RuntimeDistrict district)
+    {
+        return district == null ? 0f : GetResponseTier(district).investigationPressurePerSecond;
+    }
+
+    public void ApplyMissionLaunchHeat(RuntimeDistrict district, int concurrentMissionCount)
+    {
+        if (district == null || heatConfig == null) return;
+
+        float amount = heatConfig.heatPerMissionLaunch
+                     + Mathf.Max(0, concurrentMissionCount) * heatConfig.heatPerConcurrentMission;
+
+        district.AddHeat(amount);
+    }
+
+    public void ApplyMissionOutcomeHeat(RuntimeDistrict district, MissionData mission, bool success)
+    {
+        if (district == null || mission == null) return;
+        district.AddHeat(success ? mission.heatOnSuccess : mission.heatOnFailure);
+    }
+
+    public void ApplyAgentLossHeat(RuntimeDistrict district, int lostAgentCount)
+    {
+        if (district == null || heatConfig == null || lostAgentCount <= 0) return;
+        district.AddHeat(lostAgentCount * heatConfig.heatPerLostAgent);
     }
 
     // ── Selection (called by DistrictMapInput) ────────────────────────
@@ -109,19 +189,24 @@ public class DistrictManager : MonoBehaviour
     private void TickAllDistricts()
     {
         float dt = Time.deltaTime;
+        float heatDecayRate = heatConfig != null ? heatConfig.heatDecayPerSecond : 0f;
 
         for (int i = 0; i < runtimeDistricts.Length; i++)
         {
             RuntimeDistrict rd = runtimeDistricts[i];
             if (!rd.IsUnlocked) continue;
 
+            if (rd.LocalHeat > 0f && heatDecayRate > 0f)
+                rd.LocalHeat = Mathf.Max(0f, rd.LocalHeat - heatDecayRate * dt);
+
             // Chaos decays locally.
             if (rd.LocalChaos > 0f)
                 rd.LocalChaos = Mathf.Max(0f, rd.LocalChaos - chaosDecayRate * dt);
 
             // Cure fills locally.
-            if (rd.LocalCure < maxLocalCure)
-                rd.LocalCure = Mathf.Min(maxLocalCure, rd.LocalCure + cureFillRate * dt);
+            float cureRate = cureFillRate + GetInvestigationPressure(rd);
+            if (rd.LocalCure < maxLocalCure && cureRate > 0f)
+                rd.LocalCure = Mathf.Min(maxLocalCure, rd.LocalCure + cureRate * dt);
 
             // People grow based on local chaos.
             float growth = rd.LocalChaos * peopleGrowthMultiplier * dt;

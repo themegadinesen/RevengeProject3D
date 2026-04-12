@@ -16,6 +16,11 @@ public class ActiveMission
     public float            MissionScore;           // 0–1
     public float            RewardMultiplier;       // computed at launch
     public float            SlowBurnChaosApplied;
+    public float            SuccessChanceAtLaunch;
+    public float            DistrictCureMultiplier;
+    public float            BonusAgentLossChance;
+    public float            DistrictHeatAtLaunch;
+    public DistrictResponseState ResponseStateAtLaunch;
 
     /// <summary>0 → 1 progress.</summary>
     public float Progress => Duration > 0f ? 1f - (TimeRemaining / Duration) : 1f;

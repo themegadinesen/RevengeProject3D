@@ -1,12 +1,15 @@
-// Assets/Scripts/Data/MissionData.cs
 using UnityEngine;
 
 public enum MissionBehavior
 {
-    /// <summary>All effects applied on resolution.</summary>
     Instant,
-    /// <summary>Chaos drips in gradually over the mission duration.</summary>
     SlowBurn
+}
+
+public enum MissionSpecialReward
+{
+    None,
+    CandidateArrival
 }
 
 [CreateAssetMenu(fileName = "NewMission", menuName = "Gameplay/Mission")]
@@ -39,14 +42,22 @@ public class MissionData : ScriptableObject
     [Min(0f)] public float duration = 30f;
     public MissionBehavior behavior = MissionBehavior.Instant;
 
+    [Header("Special Reward")]
+    [Tooltip("Optional extra reward granted on success.")]
+    public MissionSpecialReward specialReward = MissionSpecialReward.None;
+    [Tooltip("Used when Special Reward is CandidateArrival. Leave empty to use the RecruitmentManager fallback pool.")]
+    public AgentData[] candidatePool;
+
     [Header("Effects on Success")]
-    public float chaosOnSuccess  = 10f;
-    public float cureOnSuccess   = 0f;
-    public int   moneyOnSuccess  = 50;
+    public float chaosOnSuccess = 10f;
+    public float heatOnSuccess = 8f;
+    public float cureOnSuccess = 0f;
+    public int moneyOnSuccess = 50;
 
     [Header("Effects on Failure")]
-    public float chaosOnFailure  = 2f;
-    public float cureOnFailure   = 15f;
+    public float chaosOnFailure = 2f;
+    public float heatOnFailure = 12f;
+    public float cureOnFailure = 15f;
     [Tooltip("Agents randomly lost from the team on failure.")]
-    public int   agentsLostOnFailure = 1;
+    public int agentsLostOnFailure = 1;
 }

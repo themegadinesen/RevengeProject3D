@@ -12,6 +12,7 @@ using TMPro;
 public class DistrictHoverUI : MonoBehaviour
 {
     [Header("References")]
+    [SerializeField] private DistrictManager districtManager;
     [SerializeField] private MissionManager missionManager;
 
     [Header("Text Fields")]
@@ -19,6 +20,8 @@ public class DistrictHoverUI : MonoBehaviour
     [SerializeField] private TextMeshProUGUI txtLockStatus;
     [SerializeField] private TextMeshProUGUI txtChaos;
     [SerializeField] private TextMeshProUGUI txtCure;
+    [SerializeField] private TextMeshProUGUI txtHeat;
+    [SerializeField] private TextMeshProUGUI txtResponseState;
     [SerializeField] private TextMeshProUGUI txtPopulation;
     [SerializeField] private TextMeshProUGUI txtMissionPressure;
 
@@ -103,18 +106,34 @@ public class DistrictHoverUI : MonoBehaviour
         {
             txtChaos.text      = $"Chaos: {d.LocalChaos:F1} / {d.MaxChaos}";
             txtCure.text       = $"Cure: {d.LocalCure:F1} / {d.MaxCure}";
+            if (txtHeat != null) txtHeat.text = $"Heat: {d.LocalHeat:F1} / {d.MaxHeat}";
+            if (txtResponseState != null)
+            {
+                DistrictResponseState state = districtManager != null
+                    ? districtManager.GetResponseState(d)
+                    : DistrictResponseState.Calm;
+
+                txtResponseState.text = $"Response: {state}";
+            }
             txtPopulation.text = $"People Affected: {d.LocalPeopleAffected:#,0}";
 
             if (txtMissionPressure != null)
             {
                 int count = missionManager.GetActiveMissionCountForDistrict(d);
-                txtMissionPressure.text = $"Active Missions: {count}";
+                float pressure = districtManager != null
+                    ? districtManager.GetInvestigationPressure(d)
+                    : 0f;
+
+                txtMissionPressure.text =
+                    $"Pressure: +{pressure:F1} Cure/s  |  Active Missions: {count}";
             }
         }
         else
         {
             txtChaos.text      = "Chaos: ???";
             txtCure.text       = "Cure: ???";
+            if (txtHeat != null) txtHeat.text = "Heat: ???";
+            if (txtResponseState != null) txtResponseState.text = "Response: ???";
             txtPopulation.text = "People: ???";
             if (txtMissionPressure != null)
                 txtMissionPressure.text = "";

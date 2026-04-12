@@ -19,9 +19,12 @@ MonoBehaviour:
   requiredSTR: 1
   requiredAGI: 1
   requiredDomain: 0
-  requiredBuilding: {fileID: 0}
+  requiredBuilding: {fileID: 11400000, guid: 6e15a02f17acc0c48a0a2c12b86eeb9a, type: 2}
   duration: 30
   behavior: 0
+  specialReward: 1
+  candidatePool:
+  - {fileID: 11400000, guid: daf3cebd6e79a5f42a8e92a5da390e90, type: 2}
   chaosOnSuccess: 3
   cureOnSuccess: 0
   moneyOnSuccess: 0

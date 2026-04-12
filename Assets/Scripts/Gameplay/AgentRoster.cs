@@ -1,4 +1,3 @@
-// Assets/Scripts/Gameplay/AgentRoster.cs
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -11,21 +10,22 @@ public class AgentRoster : MonoBehaviour
 
     private readonly List<RuntimeAgent> agents = new();
 
-    /// <summary>Full roster (including Lost agents) — read-only for UI/debug.</summary>
     public IReadOnlyList<RuntimeAgent> AllAgents => agents;
 
-    /// <summary>Fired whenever any agent's status changes.</summary>
     public event Action OnRosterChanged;
 
-    // ── Counts ────────────────────────────────────────────────────────
     public int TotalCount
     {
         get
         {
-            int c = 0;
-            foreach (var a in agents)
-                if (a.Status != AgentStatus.Lost) c++;
-            return c;
+            int count = 0;
+            foreach (var agent in agents)
+            {
+                if (agent.Status != AgentStatus.Lost)
+                    count++;
+            }
+
+            return count;
         }
     }
 
@@ -33,10 +33,14 @@ public class AgentRoster : MonoBehaviour
     {
         get
         {
-            int c = 0;
-            foreach (var a in agents)
-                if (a.Status == AgentStatus.Available) c++;
-            return c;
+            int count = 0;
+            foreach (var agent in agents)
+            {
+                if (agent.Status == AgentStatus.Available)
+                    count++;
+            }
+
+            return count;
         }
     }
 
@@ -44,55 +48,87 @@ public class AgentRoster : MonoBehaviour
     {
         get
         {
-            int c = 0;
-            foreach (var a in agents)
-                if (a.Status == AgentStatus.Busy) c++;
-            return c;
+            int count = 0;
+            foreach (var agent in agents)
+            {
+                if (agent.Status == AgentStatus.Busy)
+                    count++;
+            }
+
+            return count;
         }
     }
 
-    // ── Lifecycle ─────────────────────────────────────────────────────
     private void Start()
     {
-        foreach (var template in startingAgents)
-            agents.Add(new RuntimeAgent(template));
+        if (startingAgents != null)
+        {
+            foreach (var template in startingAgents)
+            {
+                if (template != null)
+                    agents.Add(new RuntimeAgent(template));
+            }
+        }
 
         OnRosterChanged?.Invoke();
     }
 
-    // ── Queries ───────────────────────────────────────────────────────
     public List<RuntimeAgent> GetAvailableAgents()
     {
         var result = new List<RuntimeAgent>();
-        foreach (var a in agents)
-            if (a.Status == AgentStatus.Available)
-                result.Add(a);
+
+        foreach (var agent in agents)
+        {
+            if (agent.Status == AgentStatus.Available)
+                result.Add(agent);
+        }
+
         return result;
     }
 
-    // ── Mutators ──────────────────────────────────────────────────────
     public void SetBusy(RuntimeAgent agent)
     {
+        if (agent == null) return;
+
         agent.Status = AgentStatus.Busy;
         OnRosterChanged?.Invoke();
     }
 
     public void SetAvailable(RuntimeAgent agent)
     {
+        if (agent == null) return;
+
         agent.Status = AgentStatus.Available;
         OnRosterChanged?.Invoke();
     }
 
     public void LoseAgent(RuntimeAgent agent)
     {
+        if (agent == null) return;
+
         agent.Status = AgentStatus.Lost;
         OnRosterChanged?.Invoke();
     }
 
-    /// <summary>Recruit a new agent from a template (e.g., mission reward).</summary>
     public void RecruitAgent(AgentData template)
     {
+        if (template == null) return;
+
         agents.Add(new RuntimeAgent(template));
+        OnRosterChanged?.Invoke();
+    }
+
+    public void RecruitCandidate(PendingRecruitCandidate candidate)
+    {
+        if (candidate == null) return;
+
+        agents.Add(new RuntimeAgent(
+            candidate.Template,
+            candidate.CandidateName,
+            candidate.INT,
+            candidate.STR,
+            candidate.AGI));
+
         OnRosterChanged?.Invoke();
     }
 }

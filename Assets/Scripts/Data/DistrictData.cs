@@ -27,6 +27,9 @@ public class DistrictData : ScriptableObject
     [Tooltip("Local cure progress this district starts with.")]
     [Min(0f)] public float startingCure;
 
+    [Tooltip("Local heat this district starts with.")]
+    [Min(0f)] public float startingHeat;
+
     [Header("Missions")]
     [Tooltip("Missions available in this district.")]
     public MissionData[] missions;

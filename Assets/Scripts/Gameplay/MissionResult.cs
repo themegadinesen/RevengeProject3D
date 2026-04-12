@@ -1,15 +1,18 @@
-// Assets/Scripts/Gameplay/MissionResult.cs
 using System.Collections.Generic;
 
-/// <summary>
-/// Carries mission resolution details to UI via the OnMissionResolved event.
-/// </summary>
 public class MissionResult
 {
-    public MissionData      Data;
-    public RuntimeDistrict  District;       // which district was affected (null = global)
-    public bool             Success;
-    public float            Score;
-    public int              ActualMoneyReward;
-    public List<RuntimeAgent> LostAgents;   // null or empty on success
+    public MissionData Data;
+    public RuntimeDistrict District;
+    public bool Success;
+    public float Score;
+    public float SuccessChance;
+    public float DistrictCureMultiplier;
+    public float BonusAgentLossChance;
+    public float DistrictHeatBeforeOutcome;
+    public float DistrictHeatAfterOutcome;
+    public DistrictResponseState ResponseState;
+    public int ActualMoneyReward;
+    public List<RuntimeAgent> LostAgents;
+    public PendingRecruitCandidate ArrivedCandidate;
 }

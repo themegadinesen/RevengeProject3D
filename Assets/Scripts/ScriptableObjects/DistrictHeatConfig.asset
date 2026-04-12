@@ -1,0 +1,44 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d44d51caca7ff2d4596333f7f540f6e8, type: 3}
+  m_Name: DistrictHeatConfig
+  m_EditorClassIdentifier: Assembly-CSharp::DistrictHeatConfig
+  maxHeat: 100
+  heatDecayPerSecond: 0.1
+  heatPerMissionLaunch: 15
+  heatPerConcurrentMission: 2
+  heatPerLostAgent: 8
+  responseTiers:
+  - state: 0
+    heatThreshold: 0
+    successChancePenalty: 0
+    bonusAgentLossChance: 0
+    missionCureMultiplier: 1
+    investigationPressurePerSecond: 0
+  - state: 1
+    heatThreshold: 25
+    successChancePenalty: 0.08
+    bonusAgentLossChance: 0.1
+    missionCureMultiplier: 0.9
+    investigationPressurePerSecond: 0.15
+  - state: 2
+    heatThreshold: 50
+    successChancePenalty: 0.16
+    bonusAgentLossChance: 0.2
+    missionCureMultiplier: 0.75
+    investigationPressurePerSecond: 0.35
+  - state: 3
+    heatThreshold: 75
+    successChancePenalty: 0.28
+    bonusAgentLossChance: 0.35
+    missionCureMultiplier: 0.55
+    investigationPressurePerSecond: 0.75

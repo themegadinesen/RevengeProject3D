@@ -40,6 +40,7 @@ public class MissionPanelUI : MonoBehaviour
     [SerializeField] private TextMeshProUGUI txtCost;
     [SerializeField] private TextMeshProUGUI txtRequirements;
     [SerializeField] private TextMeshProUGUI txtDuration;
+    [SerializeField] private TextMeshProUGUI txtDistrictRisk;
 
     [Header("Infrastructure Lock Status")]
     [Tooltip("Optional text that shows domain/building lock reasons. Hidden when no requirements.")]
@@ -108,7 +109,7 @@ public class MissionPanelUI : MonoBehaviour
         if (!missionContentRoot.activeSelf) return;
 
         MissionData m = currentMissions[selectedIndex];
-        ActiveMission active = missionManager.GetActiveMission(m);
+        ActiveMission active = missionManager.GetActiveMission(m, activeDistrict);
 
         if (active != null && txtActiveStatus != null)
         {
@@ -121,6 +122,10 @@ public class MissionPanelUI : MonoBehaviour
         {
             txtActiveStatus.gameObject.SetActive(false);
         }
+
+        RefreshDistrictRisk();
+        RefreshTeamPreview();
+        RefreshLaunchButton();
     }
 
     // ── Open / Close ──────────────────────────────────────────────────
@@ -256,8 +261,35 @@ public class MissionPanelUI : MonoBehaviour
         RefreshInfraStatus(m);
 
         RebuildAgentList();
+        RefreshDistrictRisk();
         RefreshTeamPreview();
         RefreshLaunchButton();
+    }
+
+    private void RefreshDistrictRisk()
+    {
+        if (txtDistrictRisk == null) return;
+
+        if (activeDistrict == null)
+        {
+            txtDistrictRisk.gameObject.SetActive(false);
+            return;
+        }
+
+        DistrictResponseState responseState = missionManager.GetDistrictResponseState(activeDistrict);
+        float successPenalty = missionManager.GetDistrictSuccessChancePenalty(activeDistrict);
+        float cureMultiplier = missionManager.GetDistrictCureMultiplier(activeDistrict);
+        float extraLossChance = missionManager.GetDistrictBonusAgentLossChance(activeDistrict);
+        float pressure = missionManager.GetDistrictInvestigationPressure(activeDistrict);
+
+        txtDistrictRisk.gameObject.SetActive(true);
+        txtDistrictRisk.text =
+            $"District Risk — Heat {activeDistrict.LocalHeat:F1}/{activeDistrict.MaxHeat:F0}  |  " +
+            $"State: {responseState}  |  " +
+            $"Success Penalty: -{successPenalty * 100f:F0}%  |  " +
+            $"Cure x{cureMultiplier:F2}  |  " +
+            $"Extra Loss: {extraLossChance * 100f:F0}%  |  " +
+            $"Pressure: +{pressure:F1}/s";
     }
 
     private void RefreshInfraStatus(MissionData m)
@@ -360,9 +392,12 @@ public class MissionPanelUI : MonoBehaviour
             {
                 float score  = MissionManager.CalculateScoreFromTotals(
                                    tINT, tSTR, tAGI, m);
-                float chance = missionManager.GetSuccessChance(score);
+                float baseChance = missionManager.GetBaseSuccessChance(score);
+                float heatPenalty = missionManager.GetDistrictSuccessChancePenalty(activeDistrict);
+                float chance = missionManager.GetSuccessChance(score, activeDistrict);
                 float durMul = missionManager.GetDurationMultiplier(score);
                 float rewMul = missionManager.GetRewardMultiplier(score);
+                DistrictResponseState responseState = missionManager.GetDistrictResponseState(activeDistrict);
 
                 string durText = m.duration > 0f
                     ? $"~{m.duration * durMul:F0}s"
@@ -371,7 +406,8 @@ public class MissionPanelUI : MonoBehaviour
                 txtScorePreview.gameObject.SetActive(true);
                 txtScorePreview.text =
                     $"Score: {score * 100f:F0}%  |  " +
-                    $"Success: {chance * 100f:F0}%  |  " +
+                    $"Success: {chance * 100f:F0}% (Base {baseChance * 100f:F0}%  -  Risk {heatPenalty * 100f:F0}%)  |  " +
+                    $"State: {responseState}  |  " +
                     $"Duration: {durText}  |  " +
                     $"Reward: x{rewMul:F1}";
             }
@@ -385,7 +421,7 @@ public class MissionPanelUI : MonoBehaviour
     private void RefreshLaunchButton()
     {
         MissionData m = currentMissions[selectedIndex];
-        bool isActive  = missionManager.IsMissionActive(m);
+        bool isActive  = missionManager.IsMissionActive(m, activeDistrict);
 
         // Infrastructure gate.
         bool infraOk = baseProgression == null
@@ -395,6 +431,7 @@ public class MissionPanelUI : MonoBehaviour
                          && gameState.Money >= m.moneyCost
                          && !gameState.IsRunEnded
                          && !isActive
+                         && !resultOverlay.activeSelf
                          && infraOk;
 
         btnLaunch.interactable = canLaunch;
@@ -436,12 +473,17 @@ public class MissionPanelUI : MonoBehaviour
                 ? "(Chaos applied during op)"
                 : $"+{m.chaosOnSuccess} Chaos";
 
+            string heatLine = result.District != null
+                ? $"\nHeat: {result.DistrictHeatBeforeOutcome:F1} -> {result.DistrictHeatAfterOutcome:F1} ({result.ResponseState})"
+                : "";
+
             txtResult.text =
                 $"<b>{districtLabel}{m.missionName}</b>\n" +
                 $"<color=green>SUCCESS!</color>  " +
-                $"(Score: {result.Score * 100f:F0}%)\n" +
+                $"(Score: {result.Score * 100f:F0}%  |  Chance Used: {result.SuccessChance * 100f:F0}%)\n" +
                 $"{chaosLine}\n" +
-                $"+${result.ActualMoneyReward} Money";
+                $"+${result.ActualMoneyReward} Money" +
+                heatLine;
         }
         else
         {
@@ -453,12 +495,17 @@ public class MissionPanelUI : MonoBehaviour
                 lostLine = $"Lost: {string.Join(", ", names)}";
             }
 
+            string heatLine = result.District != null
+                ? $"\nHeat: {result.DistrictHeatBeforeOutcome:F1} -> {result.DistrictHeatAfterOutcome:F1} ({result.ResponseState})"
+                : "";
+
             txtResult.text =
                 $"<b>{districtLabel}{m.missionName}</b>\n" +
                 $"<color=red>FAILED</color>  " +
-                $"(Score: {result.Score * 100f:F0}%)\n" +
+                $"(Score: {result.Score * 100f:F0}%  |  Chance Used: {result.SuccessChance * 100f:F0}%)\n" +
                 $"{lostLine}\n" +
-                $"+{m.chaosOnFailure} Chaos  +{m.cureOnFailure} Cure";
+                $"+{m.chaosOnFailure} Chaos  +{m.cureOnFailure} Cure" +
+                heatLine;
         }
     }
 

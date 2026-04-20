@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 542b9f522ea97e64a9cbf0513afd2f76, type: 3}
   m_Name: DefaultViewTransitionConfig
   m_EditorClassIdentifier: Assembly-CSharp::ViewTransitionConfig
-  enterBaseThreshold: 6
+  enterBaseThreshold: 5
   peakBlurStrength: 0.4
   transitionDuration: 0.3
   blurCurve:

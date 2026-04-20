@@ -1,35 +1,33 @@
-// Assets/Scripts/UI/EndingPanelUI.cs
 using UnityEngine;
-using UnityEngine.UI;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 using TMPro;
 
 public class EndingPanelUI : MonoBehaviour
 {
     [Header("UI Elements")]
-    [SerializeField] private GameObject panelRoot;
     [SerializeField] private TextMeshProUGUI txtOutcomeTitle;
     [SerializeField] private TextMeshProUGUI txtNarrative;
     [SerializeField] private TextMeshProUGUI txtFinalStats;
     [SerializeField] private Button btnRestart;
 
-    private void Awake()
-    {
-        panelRoot.SetActive(false);
-    }
-
     private void OnEnable()
     {
-        btnRestart.onClick.AddListener(OnRestartClicked);
+        if (btnRestart != null)
+            btnRestart.onClick.AddListener(OnRestartClicked);
     }
 
     private void OnDisable()
     {
-        btnRestart.onClick.RemoveListener(OnRestartClicked);
+        if (btnRestart != null)
+            btnRestart.onClick.RemoveListener(OnRestartClicked);
     }
 
     public void Show(RunOutcome outcome, string narrative, GameState state)
     {
+        if (!gameObject.activeSelf)
+            gameObject.SetActive(true);
+
         txtOutcomeTitle.text = outcome switch
         {
             RunOutcome.HollowVictory => "HOLLOW VICTORY",
@@ -45,8 +43,11 @@ public class EndingPanelUI : MonoBehaviour
             $"Chaos: {state.Chaos:F1}\n" +
             $"Cure: {state.Cure:F1} / {state.MaxCure}\n" +
             $"Money: ${state.Money}";
+    }
 
-        panelRoot.SetActive(true);
+    public void Hide()
+    {
+        gameObject.SetActive(false);
     }
 
     private void OnRestartClicked()

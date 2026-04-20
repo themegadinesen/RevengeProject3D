@@ -1,16 +1,12 @@
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// Perspective camera controller for the 3D base view.
-/// Dolly-zoom via scroll, middle-mouse pan, spring-back to center.
-///
-/// Attach to Main Camera. Starts DISABLED — ViewManager enables it
-/// when transitioning into the base.
+/// Handles perspective base-view camera zoom, pan, framing, and top-down blending.
 /// </summary>
 public class BaseCameraController : MonoBehaviour
 {
-    // ── Inspector ─────────────────────────────────────────────────────
     [Header("Input Actions")]
     [SerializeField] private InputAction scrollAction = new InputAction(
         "Scroll", InputActionType.Value, "<Mouse>/scroll/y"
@@ -24,53 +20,75 @@ public class BaseCameraController : MonoBehaviour
         "PanDelta", InputActionType.Value, "<Pointer>/delta"
     );
 
-    [Header("Tuning")]
-    [Tooltip("How far each scroll tick moves the camera (dolly).")]
-    [SerializeField] private float zoomSpeed = 2f;
+    private static readonly Vector3 TopDownScreenUpFallback = Vector3.forward;
 
-    [Tooltip("Pan speed multiplier.")]
-    [SerializeField] private float panSpeed = 0.3f;
-
-    [Tooltip("How fast position and rotation lerp. Higher = snappier.")]
-    [Range(1f, 20f)]
-    [SerializeField] private float smoothSpeed = 8f;
-
-    [Tooltip("How fast pan springs back to center after releasing.")]
-    [Range(1f, 20f)]
-    [SerializeField] private float springBackSpeed = 4f;
-
-    [Tooltip("Max pan distance from center.")]
-    [SerializeField] private float maxPanDistance = 10f;
-
-    // ── Runtime (set by Initialize) ───────────────────────────────────
+    private Camera cam;
+    private CameraZoomConfig config;
     private Vector3 lookAtPoint;
-    private Vector3 offsetDirection;
+    private Vector3 orbitDirection;
+    private float requestedDistance;
     private float targetDistance;
     private float minDistance;
     private float maxDistance;
+    private float returnToMapDistance;
+    private float topDownTransitionStartDistance;
+    private float topDownTransitionCompleteDistance;
+    private float baseFieldOfView;
+    private float topDownBaseFieldOfView;
+    private float topDownHeightBoost;
     private Vector3 panOffset;
     private bool inputLocked;
     private bool wantsExit;
 
-    /// <summary>
-    /// True when the player scrolls out past max distance.
-    /// ViewManager reads this to trigger the transition back to map.
-    /// </summary>
     public bool WantsToExitBase => wantsExit;
+    public float TargetDistance => targetDistance;
+    public float MinDistance => minDistance;
+    public float MaxDistance => maxDistance;
+    public float TopDownTransitionCompleteDistance => topDownTransitionCompleteDistance;
+    public float ReturnToMapDistance => returnToMapDistance;
 
-    // ── Public API ────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Called by ViewManager when entering base view. Sets up the camera
-    /// orbit center, direction, and distance limits.
-    /// </summary>
-    public void Initialize(Vector3 lookAt, Vector3 cameraOffset, float minDist, float maxDist)
+    private void Awake()
     {
+        cam = GetComponent<Camera>();
+    }
+
+    public void Initialize(
+        CameraZoomConfig activeConfig,
+        Vector3 lookAt,
+        Vector3 cameraDirection,
+        float startDistance,
+        float minDist,
+        float maxDist,
+        float topDownStartDist,
+        float topDownCompleteDist,
+        float exitDist,
+        float normalBaseFieldOfView,
+        float fullyTopDownFieldOfView,
+        float fullyTopDownHeightBoost)
+    {
+        config = activeConfig;
         lookAtPoint = lookAt;
-        offsetDirection = cameraOffset.normalized;
-        targetDistance = cameraOffset.magnitude;
-        minDistance = minDist;
-        maxDistance = maxDist;
+        orbitDirection = cameraDirection.sqrMagnitude > 0.0001f
+            ? cameraDirection.normalized
+            : Vector3.back;
+
+        minDistance = Mathf.Max(0.1f, minDist);
+        topDownTransitionStartDistance = Mathf.Max(minDistance, topDownStartDist);
+        topDownTransitionCompleteDistance = Mathf.Max(
+            topDownTransitionStartDistance,
+            topDownCompleteDist
+        );
+
+        maxDistance = Mathf.Max(minDistance, maxDist, topDownTransitionCompleteDistance);
+        returnToMapDistance = Mathf.Max(exitDist, maxDistance);
+
+        requestedDistance = Mathf.Clamp(startDistance, minDistance, maxDistance);
+        targetDistance = requestedDistance;
+
+        baseFieldOfView = Mathf.Clamp(normalBaseFieldOfView, 1f, 179f);
+        topDownBaseFieldOfView = Mathf.Clamp(fullyTopDownFieldOfView, 1f, 179f);
+        topDownHeightBoost = Mathf.Max(0f, fullyTopDownHeightBoost);
+
         panOffset = Vector3.zero;
         wantsExit = false;
     }
@@ -80,7 +98,30 @@ public class BaseCameraController : MonoBehaviour
         inputLocked = locked;
     }
 
-    // ── Lifecycle ─────────────────────────────────────────────────────
+    public void SnapToCurrentState(Transform cameraTransform)
+    {
+        Vector3 center = GetCurrentCenter();
+        Vector3 desiredPosition = GetDesiredCameraPosition(center);
+
+        cameraTransform.position = desiredPosition;
+        cameraTransform.rotation = GetDesiredCameraRotation(center, desiredPosition);
+
+        if (cam != null)
+            cam.fieldOfView = GetDesiredFieldOfView();
+    }
+
+    public void SetDistanceTarget(float distance)
+    {
+        if (config == null) return;
+
+        requestedDistance = Mathf.Max(0f, distance);
+        wantsExit = false;
+
+        if (requestedDistance < minDistance)
+            requestedDistance = minDistance;
+
+        targetDistance = Mathf.Clamp(requestedDistance, minDistance, maxDistance);
+    }
 
     private void OnEnable()
     {
@@ -99,7 +140,7 @@ public class BaseCameraController : MonoBehaviour
 
     private void Update()
     {
-        if (inputLocked) return;
+        if (config == null) return;
 
         HandleZoom();
         HandlePan();
@@ -107,66 +148,208 @@ public class BaseCameraController : MonoBehaviour
         ApplyMovement();
     }
 
-    // ── Input ─────────────────────────────────────────────────────────
-
     private void HandleZoom()
     {
+        if (ShouldBlockRawInput()) return;
+
         float scroll = scrollAction.ReadValue<float>() / 120f;
         if (Mathf.Approximately(scroll, 0f)) return;
 
-        targetDistance -= scroll * zoomSpeed;
+        wantsExit = false;
 
-        // Trying to zoom out past max → signal exit.
-        if (targetDistance > maxDistance)
+        requestedDistance -= scroll * config.baseZoomStep;
+
+        if (requestedDistance < minDistance)
+            requestedDistance = minDistance;
+
+        if (requestedDistance > returnToMapDistance)
         {
+            requestedDistance = returnToMapDistance;
             wantsExit = true;
-            targetDistance = maxDistance;
         }
 
-        targetDistance = Mathf.Max(targetDistance, minDistance);
+        targetDistance = Mathf.Clamp(requestedDistance, minDistance, maxDistance);
     }
 
     private void HandlePan()
     {
-        if (!panButtonAction.IsPressed()) return;
+        if (!config.enableBasePan) return;
+        if (!IsPanPressed()) return;
 
         Vector2 delta = panDeltaAction.ReadValue<Vector2>();
 
-        // Pan in camera's local screen plane.
-        Vector3 right = transform.right;
-        Vector3 up = transform.up;
-        Vector3 panDelta = (-delta.x * right + -delta.y * up)
-                           * panSpeed * Time.deltaTime;
+        Quaternion panRotation = GetPanReferenceRotation();
+        Vector3 panRight = panRotation * Vector3.right;
+        Vector3 panUp = panRotation * Vector3.up;
+
+        Vector3 panDelta = (-delta.x * panRight + -delta.y * panUp)
+            * config.basePanSpeed * Time.deltaTime;
 
         panOffset += panDelta;
-        panOffset = Vector3.ClampMagnitude(panOffset, maxPanDistance);
+
+        if (config.limitBasePanToBounds)
+            panOffset = ClampPanOffsetToBounds(panOffset, panRotation);
     }
 
     private void ApplySpringBack()
     {
-        if (!panButtonAction.IsPressed() && panOffset.sqrMagnitude > 0.001f)
+        if (!config.enableBasePan) return;
+        if (!config.enableBasePanSpringBack) return;
+
+        if (!IsPanPressed() && panOffset.sqrMagnitude > 0.001f)
         {
             panOffset = Vector3.Lerp(
-                panOffset, Vector3.zero, springBackSpeed * Time.deltaTime
+                panOffset,
+                Vector3.zero,
+                config.basePanSpringBackSpeed * Time.deltaTime
             );
         }
     }
 
-    // ── Movement ──────────────────────────────────────────────────────
+    private Vector3 ClampPanOffsetToBounds(Vector3 offset, Quaternion referenceRotation)
+    {
+        Vector3 right = referenceRotation * Vector3.right;
+        Vector3 up = referenceRotation * Vector3.up;
+
+        float horizontal = Vector3.Dot(offset, right);
+        float vertical = Vector3.Dot(offset, up);
+
+        horizontal = Mathf.Clamp(horizontal, -config.basePanBounds.x, config.basePanBounds.x);
+        vertical = Mathf.Clamp(vertical, -config.basePanBounds.y, config.basePanBounds.y);
+
+        return right * horizontal + up * vertical;
+    }
+
+    private float GetTopDownBlend()
+    {
+        if (targetDistance <= topDownTransitionStartDistance)
+            return 0f;
+
+        if (topDownTransitionCompleteDistance <= topDownTransitionStartDistance)
+            return 1f;
+
+        return Mathf.InverseLerp(
+            topDownTransitionStartDistance,
+            topDownTransitionCompleteDistance,
+            targetDistance
+        );
+    }
+
+    private Vector3 GetCurrentCenter()
+    {
+        return lookAtPoint + panOffset;
+    }
+
+    private Vector3 GetCurrentOrbitDirection()
+    {
+        float blend = GetTopDownBlend();
+        return Vector3.Slerp(orbitDirection, Vector3.up, blend).normalized;
+    }
+
+    private float GetDesiredFieldOfView()
+    {
+        float blend = GetTopDownBlend();
+        return Mathf.Lerp(baseFieldOfView, topDownBaseFieldOfView, blend);
+    }
+
+    private Vector3 GetDesiredCameraPosition(Vector3 center)
+    {
+        float blend = GetTopDownBlend();
+        Vector3 currentDirection = GetCurrentOrbitDirection();
+        Vector3 heightOffset = Vector3.up * (topDownHeightBoost * blend);
+        return center + currentDirection * targetDistance + heightOffset;
+    }
+
+    private Quaternion GetPanReferenceRotation()
+    {
+        Vector3 center = GetCurrentCenter();
+        Vector3 desiredPosition = GetDesiredCameraPosition(center);
+        return GetDesiredCameraRotation(center, desiredPosition);
+    }
+
+    private Quaternion GetDesiredCameraRotation(Vector3 center, Vector3 cameraPosition)
+    {
+        Vector3 forward = center - cameraPosition;
+        if (forward.sqrMagnitude <= 0.0001f)
+            return transform.rotation;
+
+        forward.Normalize();
+
+        Vector3 upReference = GetRotationUpReference(forward);
+        return Quaternion.LookRotation(forward, upReference);
+    }
+
+    private Vector3 GetRotationUpReference(Vector3 forward)
+    {
+        Vector3 worldUpProjected = Vector3.ProjectOnPlane(Vector3.up, forward);
+        Vector3 topDownUpProjected = Vector3.ProjectOnPlane(TopDownScreenUpFallback, forward);
+
+        bool hasWorldUp = worldUpProjected.sqrMagnitude > 0.0001f;
+        bool hasTopDownUp = topDownUpProjected.sqrMagnitude > 0.0001f;
+
+        if (hasWorldUp && hasTopDownUp)
+        {
+            float blend = GetTopDownBlend();
+            return Vector3.Slerp(
+                worldUpProjected.normalized,
+                topDownUpProjected.normalized,
+                blend
+            ).normalized;
+        }
+
+        if (hasWorldUp)
+            return worldUpProjected.normalized;
+
+        if (hasTopDownUp)
+            return topDownUpProjected.normalized;
+
+        Vector3 rightProjected = Vector3.ProjectOnPlane(Vector3.right, forward);
+        if (rightProjected.sqrMagnitude > 0.0001f)
+            return rightProjected.normalized;
+
+        return Vector3.forward;
+    }
 
     private void ApplyMovement()
     {
-        Vector3 center = lookAtPoint + panOffset;
-        Vector3 desiredPos = center + offsetDirection * targetDistance;
+        Vector3 center = GetCurrentCenter();
+        Vector3 desiredPosition = GetDesiredCameraPosition(center);
 
         transform.position = Vector3.Lerp(
-            transform.position, desiredPos, smoothSpeed * Time.deltaTime
+            transform.position,
+            desiredPosition,
+            config.baseMoveLerpSpeed * Time.deltaTime
         );
 
-        // Always look at the (panned) center of the base.
-        Quaternion desiredRot = Quaternion.LookRotation(center - transform.position);
+        Quaternion desiredRotation = GetDesiredCameraRotation(center, desiredPosition);
         transform.rotation = Quaternion.Slerp(
-            transform.rotation, desiredRot, smoothSpeed * Time.deltaTime
+            transform.rotation,
+            desiredRotation,
+            config.baseMoveLerpSpeed * Time.deltaTime
         );
+
+        if (cam != null)
+        {
+            cam.fieldOfView = Mathf.Lerp(
+                cam.fieldOfView,
+                GetDesiredFieldOfView(),
+                config.baseMoveLerpSpeed * Time.deltaTime
+            );
+        }
+    }
+
+    private bool ShouldBlockRawInput()
+    {
+        return inputLocked || IsPointerOverUI();
+    }
+
+    private bool IsPanPressed()
+    {
+        return !ShouldBlockRawInput() && panButtonAction.IsPressed();
+    }
+
+    private static bool IsPointerOverUI()
+    {
+        return EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
     }
 }

@@ -1,13 +1,7 @@
-// Assets/Scripts/UI/DistrictHoverUI.cs
 using UnityEngine;
 using UnityEngine.InputSystem;
 using TMPro;
 
-/// <summary>
-/// Fade-in tooltip that follows the mouse while hovering a district.
-/// Must be a child of a Screen Space – Overlay Canvas.
-/// Requires a CanvasGroup component on the same GameObject.
-/// </summary>
 [RequireComponent(typeof(CanvasGroup))]
 public class DistrictHoverUI : MonoBehaviour
 {
@@ -32,31 +26,50 @@ public class DistrictHoverUI : MonoBehaviour
     [Tooltip("Offset in Canvas-scaled pixels from the mouse cursor.")]
     [SerializeField] private Vector2 offset = new Vector2(20f, -20f);
 
-    // ── Runtime ───────────────────────────────────────────────────────
-    private CanvasGroup     canvasGroup;
-    private RectTransform   rectTransform;
-    private RectTransform   canvasRect;
+    private CanvasGroup canvasGroup;
+    private RectTransform rectTransform;
+    private RectTransform canvasRect;
     private RuntimeDistrict currentDistrict;
-    private float           targetAlpha;
+    private float targetAlpha;
+    private bool initialized;
 
     private void Awake()
     {
-        canvasGroup   = GetComponent<CanvasGroup>();
+        Initialize();
+    }
+
+    private void OnEnable()
+    {
+        Initialize();
+        canvasGroup.blocksRaycasts = false;
+    }
+
+    private void Initialize()
+    {
+        if (initialized)
+            return;
+
+        canvasGroup = GetComponent<CanvasGroup>();
         rectTransform = GetComponent<RectTransform>();
 
-        // Walk up to the root Canvas so we can convert screen → canvas space.
-        Canvas rootCanvas = GetComponentInParent<Canvas>().rootCanvas;
-        canvasRect = rootCanvas.GetComponent<RectTransform>();
+        Canvas rootCanvas = GetComponentInParent<Canvas>()?.rootCanvas;
+        if (rootCanvas != null)
+            canvasRect = rootCanvas.GetComponent<RectTransform>();
 
-        canvasGroup.alpha          = 0f;
+        canvasGroup.alpha = 0f;
         canvasGroup.blocksRaycasts = false;
         targetAlpha = 0f;
+        initialized = true;
     }
 
     private void Update()
     {
+        Initialize();
+
         canvasGroup.alpha = Mathf.MoveTowards(
-            canvasGroup.alpha, targetAlpha, fadeSpeed * Time.unscaledDeltaTime);
+            canvasGroup.alpha,
+            targetAlpha,
+            fadeSpeed * Time.unscaledDeltaTime);
 
         canvasGroup.blocksRaycasts = false;
 
@@ -65,26 +78,42 @@ public class DistrictHoverUI : MonoBehaviour
             RefreshStats();
             FollowMouse();
         }
+
+        if (targetAlpha <= 0f && canvasGroup.alpha <= 0.001f)
+        {
+            currentDistrict = null;
+            gameObject.SetActive(false);
+        }
     }
 
-    // ── Public API (called by DistrictMapInput) ───────────────────────
     public void Show(RuntimeDistrict district, Vector2 screenPos)
     {
+        if (!gameObject.activeSelf)
+            gameObject.SetActive(true);
+
+        Initialize();
+
         currentDistrict = district;
-        targetAlpha     = 1f;
+        targetAlpha = 1f;
+
         RefreshStats();
+        FollowMouse();
     }
 
     public void Hide()
     {
-        targetAlpha     = 0f;
-        currentDistrict = null;
+        if (!initialized && !gameObject.activeSelf)
+            return;
+
+        Initialize();
+        targetAlpha = 0f;
     }
 
-    // ── Internals ─────────────────────────────────────────────────────
     private void RefreshStats()
     {
         RuntimeDistrict d = currentDistrict;
+        if (d == null)
+            return;
 
         txtDistrictName.text = d.Data.districtName;
 
@@ -94,7 +123,7 @@ public class DistrictHoverUI : MonoBehaviour
             {
                 txtLockStatus.gameObject.SetActive(true);
                 txtLockStatus.text =
-                    $"LOCKED — People Affected must reach {d.Data.peopleAffectedUnlockThreshold:#,0}";
+                    $"LOCKED - People Affected must reach {d.Data.peopleAffectedUnlockThreshold:#,0}";
             }
             else
             {
@@ -104,9 +133,12 @@ public class DistrictHoverUI : MonoBehaviour
 
         if (d.IsUnlocked)
         {
-            txtChaos.text      = $"Chaos: {d.LocalChaos:F1} / {d.MaxChaos}";
-            txtCure.text       = $"Cure: {d.LocalCure:F1} / {d.MaxCure}";
-            if (txtHeat != null) txtHeat.text = $"Heat: {d.LocalHeat:F1} / {d.MaxHeat}";
+            txtChaos.text = $"Chaos: {d.LocalChaos:F1} / {d.MaxChaos}";
+            txtCure.text = $"Cure: {d.LocalCure:F1} / {d.MaxCure}";
+
+            if (txtHeat != null)
+                txtHeat.text = $"Heat: {d.LocalHeat:F1} / {d.MaxHeat}";
+
             if (txtResponseState != null)
             {
                 DistrictResponseState state = districtManager != null
@@ -115,11 +147,15 @@ public class DistrictHoverUI : MonoBehaviour
 
                 txtResponseState.text = $"Response: {state}";
             }
+
             txtPopulation.text = $"People Affected: {d.LocalPeopleAffected:#,0}";
 
             if (txtMissionPressure != null)
             {
-                int count = missionManager.GetActiveMissionCountForDistrict(d);
+                int count = missionManager != null
+                    ? missionManager.GetActiveMissionCountForDistrict(d)
+                    : 0;
+
                 float pressure = districtManager != null
                     ? districtManager.GetInvestigationPressure(d)
                     : 0f;
@@ -130,11 +166,17 @@ public class DistrictHoverUI : MonoBehaviour
         }
         else
         {
-            txtChaos.text      = "Chaos: ???";
-            txtCure.text       = "Cure: ???";
-            if (txtHeat != null) txtHeat.text = "Heat: ???";
-            if (txtResponseState != null) txtResponseState.text = "Response: ???";
+            txtChaos.text = "Chaos: ???";
+            txtCure.text = "Cure: ???";
+
+            if (txtHeat != null)
+                txtHeat.text = "Heat: ???";
+
+            if (txtResponseState != null)
+                txtResponseState.text = "Response: ???";
+
             txtPopulation.text = "People: ???";
+
             if (txtMissionPressure != null)
                 txtMissionPressure.text = "";
         }
@@ -142,35 +184,27 @@ public class DistrictHoverUI : MonoBehaviour
 
     private void FollowMouse()
     {
-        if (Mouse.current == null) return;
+        if (Mouse.current == null || canvasRect == null)
+            return;
 
         Vector2 screenPos = Mouse.current.position.ReadValue();
 
-        // Convert screen position into the Canvas's local coordinate space.
-        // This correctly handles Canvas Scaler (Scale With Screen Size).
         RectTransformUtility.ScreenPointToLocalPointInRectangle(
             canvasRect, screenPos, null, out Vector2 localPoint);
 
         Vector2 tooltipSize = rectTransform.rect.size;
-        Vector2 canvasSize  = canvasRect.rect.size;
+        Vector2 canvasSize = canvasRect.rect.size;
 
-        // Anchor/pivot should be (0,1) = top-left, so the box hangs
-        // below-right of the cursor. Apply offset.
         Vector2 pos = localPoint + offset;
 
-        // Clamp so the tooltip stays fully on-screen.
-        // Canvas local space: X goes from -canvasSize.x/2 to +canvasSize.x/2,
-        //                     Y goes from -canvasSize.y/2 to +canvasSize.y/2.
         float minX = -canvasSize.x * 0.5f;
-        float maxX =  canvasSize.x * 0.5f - tooltipSize.x;
+        float maxX = canvasSize.x * 0.5f - tooltipSize.x;
         float minY = -canvasSize.y * 0.5f + tooltipSize.y;
-        float maxY =  canvasSize.y * 0.5f;
+        float maxY = canvasSize.y * 0.5f;
 
-        // If the box would go off the right edge, flip to the left of the cursor.
         if (pos.x + tooltipSize.x > canvasSize.x * 0.5f)
             pos.x = localPoint.x - offset.x - tooltipSize.x;
 
-        // If the box would go off the bottom edge, flip above the cursor.
         if (pos.y - tooltipSize.y < -canvasSize.y * 0.5f)
             pos.y = localPoint.y - offset.y + tooltipSize.y;
 

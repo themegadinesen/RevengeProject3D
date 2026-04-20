@@ -12,13 +12,62 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c0063b42b0eebf7468d18bd6b487ffb4, type: 3}
   m_Name: Act1CameraConfig
   m_EditorClassIdentifier: Assembly-CSharp::CameraZoomConfig
-  mapZoom: 22
-  baseZoom: 5
-  zoomLerpSpeed: 8.73
-  scrollZoomStep: 233.9
-  minScrollZoom: 4
-  maxScrollZoom: 22
-  panSpeed: 10
-  springBackSpeed: 4
-  maxPanDistance: 8
-  positionLerpSpeed: 5
+  defaultMapZoom: 22
+  defaultFocusedMapZoom: 22
+  minMapZoom: 4
+  maxMapZoom: 22
+  mapZoomStep: 100
+  mapZoomLerpSpeed: 8.73
+  mapToBaseTransitionZoom: 10.18
+  mapPanSpeed: 10
+  mapPanSpringBackSpeed: 4
+  mapMaxPanDistance: 8
+  mapPositionLerpSpeed: 5
+  baseZoomStep: 250
+  enableBasePan: 1
+  enableBasePanSpringBack: 0
+  limitBasePanToBounds: 1
+  basePanBounds: {x: 25, y: 25}
+  basePanSpeed: 5
+  basePanSpringBackSpeed: 4
+  baseMoveLerpSpeed: 4.69
+  defaultBaseFieldOfView: 60.3
+  defaultTopDownBaseFieldOfView: 90
+  defaultBaseDistance: 60
+  defaultTopDownHeightBoost: 6
+  peakBlurStrength: 0.4
+  transitionDuration: 0.3
+  swapPoint: 0.5
+  blurCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 4
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.5
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: -4
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4

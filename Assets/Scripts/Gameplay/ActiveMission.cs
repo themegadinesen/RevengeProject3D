@@ -17,6 +17,8 @@ public class ActiveMission
     public float            RewardMultiplier;       // computed at launch
     public float            SlowBurnChaosApplied;
     public float            SuccessChanceAtLaunch;
+    public float            TraitSuccessChanceBonus;
+    public float            ImplantSuccessPenaltyApplied;
     public float            DistrictCureMultiplier;
     public float            BonusAgentLossChance;
     public float            DistrictHeatAtLaunch;

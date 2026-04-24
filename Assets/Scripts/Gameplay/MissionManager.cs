@@ -169,9 +169,84 @@ public class MissionManager : MonoBehaviour
             : 0f;
     }
 
+    public int GetRookieMissionStatPenalty()
+    {
+        return recruitmentManager != null ? recruitmentManager.RookieMissionStatPenalty : 0;
+    }
+
+    public int GetRemainingImplantPenaltyMissions()
+    {
+        return recruitmentManager != null ? recruitmentManager.RemainingImplantPenaltyMissions : 0;
+    }
+
+    public float GetRecruitmentSabotagePenaltyPreview()
+    {
+        return recruitmentManager != null ? recruitmentManager.CurrentImplantMissionSuccessPenalty : 0f;
+    }
+
+    public void GetMissionTeamTotals(
+        List<RuntimeAgent> team,
+        out int totalINT,
+        out int totalSTR,
+        out int totalAGI)
+    {
+        totalINT = 0;
+        totalSTR = 0;
+        totalAGI = 0;
+
+        if (team == null)
+            return;
+
+        int rookiePenalty = GetRookieMissionStatPenalty();
+
+        foreach (RuntimeAgent agent in team)
+        {
+            if (agent == null)
+                continue;
+
+            totalINT += agent.GetMissionINT(rookiePenalty);
+            totalSTR += agent.GetMissionSTR(rookiePenalty);
+            totalAGI += agent.GetMissionAGI(rookiePenalty);
+        }
+    }
+
+    public float GetTeamTraitSuccessChanceBonus(List<RuntimeAgent> team)
+    {
+        float bonus = 0f;
+
+        if (team == null)
+            return bonus;
+
+        foreach (RuntimeAgent agent in team)
+        {
+            if (agent == null)
+                continue;
+
+            bonus += agent.GetMissionSuccessChanceBonus();
+        }
+
+        return bonus;
+    }
+
+    public float CalculateMissionScoreForTeam(
+        List<RuntimeAgent> team,
+        MissionData mission)
+    {
+        GetMissionTeamTotals(team, out int totalINT, out int totalSTR, out int totalAGI);
+        return CalculateScoreFromTotals(totalINT, totalSTR, totalAGI, mission);
+    }
+
     public float GetSuccessChance(float score, RuntimeDistrict district)
     {
         return Mathf.Clamp01(GetBaseSuccessChance(score) - GetDistrictSuccessChancePenalty(district));
+    }
+
+    public float GetTeamSuccessChance(
+        float score,
+        List<RuntimeAgent> team,
+        RuntimeDistrict district)
+    {
+        return GetTeamSuccessChance(score, team, district, GetRecruitmentSabotagePenaltyPreview());
     }
 
     public float GetDurationMultiplier(float score)
@@ -246,9 +321,13 @@ public class MissionManager : MonoBehaviour
         foreach (var agent in team)
             agentRoster.SetBusy(agent);
 
-        float score = CalculateMissionScore(team, mission);
+        float score = CalculateMissionScoreForTeam(team, mission);
+        float traitSuccessBonus = GetTeamTraitSuccessChanceBonus(team);
+        float implantPenalty = recruitmentManager != null
+            ? recruitmentManager.ConsumeImplantMissionSuccessPenalty()
+            : 0f;
         float rewardMult = GetRewardMultiplier(score);
-        float successChance = GetSuccessChance(score, district);
+        float successChance = GetTeamSuccessChance(score, team, district, implantPenalty);
         float cureMultiplier = GetDistrictCureMultiplier(district);
         float bonusLossChance = GetDistrictBonusAgentLossChance(district);
         float launchHeat = district != null ? district.LocalHeat : 0f;
@@ -263,6 +342,8 @@ public class MissionManager : MonoBehaviour
                 rewardMult,
                 district,
                 successChance,
+                traitSuccessBonus,
+                implantPenalty,
                 cureMultiplier,
                 bonusLossChance,
                 launchHeat,
@@ -284,6 +365,8 @@ public class MissionManager : MonoBehaviour
             RewardMultiplier = rewardMult,
             SlowBurnChaosApplied = 0f,
             SuccessChanceAtLaunch = successChance,
+            TraitSuccessChanceBonus = traitSuccessBonus,
+            ImplantSuccessPenaltyApplied = implantPenalty,
             DistrictCureMultiplier = cureMultiplier,
             BonusAgentLossChance = bonusLossChance,
             DistrictHeatAtLaunch = launchHeat,
@@ -334,6 +417,8 @@ public class MissionManager : MonoBehaviour
         float rewardMult,
         RuntimeDistrict district,
         float successChance,
+        float traitSuccessBonus,
+        float implantPenalty,
         float districtCureMultiplier,
         float bonusAgentLossChance,
         float launchHeat,
@@ -349,6 +434,8 @@ public class MissionManager : MonoBehaviour
             rewardMult,
             district,
             successChance,
+            traitSuccessBonus,
+            implantPenalty,
             districtCureMultiplier,
             bonusAgentLossChance,
             launchHeat,
@@ -369,6 +456,8 @@ public class MissionManager : MonoBehaviour
             active.RewardMultiplier,
             active.District,
             active.SuccessChanceAtLaunch,
+            active.TraitSuccessChanceBonus,
+            active.ImplantSuccessPenaltyApplied,
             active.DistrictCureMultiplier,
             active.BonusAgentLossChance,
             active.DistrictHeatAtLaunch,
@@ -385,6 +474,8 @@ public class MissionManager : MonoBehaviour
         float rewardMult,
         RuntimeDistrict district,
         float successChance,
+        float traitSuccessBonus,
+        float implantPenalty,
         float districtCureMultiplier,
         float bonusAgentLossChance,
         float launchHeat,
@@ -397,6 +488,11 @@ public class MissionManager : MonoBehaviour
             Success = success,
             Score = score,
             SuccessChance = successChance,
+            TraitSuccessChanceBonus = traitSuccessBonus,
+            ImplantSuccessPenaltyApplied = implantPenalty,
+            RemainingImplantPenaltyMissions = recruitmentManager != null
+                ? recruitmentManager.RemainingImplantPenaltyMissions
+                : 0,
             DistrictCureMultiplier = districtCureMultiplier,
             BonusAgentLossChance = bonusAgentLossChance,
             DistrictHeatBeforeOutcome = district != null ? district.LocalHeat : launchHeat,
@@ -426,7 +522,10 @@ public class MissionManager : MonoBehaviour
             result.ActualMoneyReward = moneyReward;
 
             foreach (var agent in team)
+            {
+                agent.RecordMissionCompleted();
                 agentRoster.SetAvailable(agent);
+            }
 
             if (mission.specialReward == MissionSpecialReward.CandidateArrival)
             {
@@ -486,7 +585,10 @@ public class MissionManager : MonoBehaviour
             }
 
             foreach (var agent in teamCopy)
+            {
+                agent.RecordMissionCompleted();
                 agentRoster.SetAvailable(agent);
+            }
 
             result.LostAgents = lostAgents;
 
@@ -497,5 +599,17 @@ public class MissionManager : MonoBehaviour
         result.DistrictHeatAfterOutcome = district != null ? district.LocalHeat : 0f;
 
         return result;
+    }
+
+    private float GetTeamSuccessChance(
+        float score,
+        List<RuntimeAgent> team,
+        RuntimeDistrict district,
+        float implantPenalty)
+    {
+        float chance = GetSuccessChance(score, district);
+        chance += GetTeamTraitSuccessChanceBonus(team);
+        chance -= Mathf.Max(0f, implantPenalty);
+        return Mathf.Clamp01(chance);
     }
 }

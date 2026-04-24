@@ -45,8 +45,8 @@ public class MissionData : ScriptableObject
     [Header("Special Reward")]
     [Tooltip("Optional extra reward granted on success.")]
     public MissionSpecialReward specialReward = MissionSpecialReward.None;
-    [Tooltip("Used when Special Reward is CandidateArrival. Leave empty to use the RecruitmentManager fallback pool.")]
-    public AgentData[] candidatePool;
+    [Tooltip("Specific handcrafted candidate delivered when this mission succeeds.")]
+    public RecruitmentCandidateDefinition rewardCandidate;
 
     [Header("Effects on Success")]
     public float chaosOnSuccess = 10f;

@@ -5,8 +5,8 @@ using UnityEngine;
 public class AgentRoster : MonoBehaviour
 {
     [Header("Starting Roster")]
-    [Tooltip("Agent templates spawned at game start.")]
-    [SerializeField] private AgentData[] startingAgents;
+    [Tooltip("Authored agent definitions spawned at game start.")]
+    [SerializeField] private RecruitmentCandidateDefinition[] startingAgents;
 
     private readonly List<RuntimeAgent> agents = new();
 
@@ -63,10 +63,10 @@ public class AgentRoster : MonoBehaviour
     {
         if (startingAgents != null)
         {
-            foreach (var template in startingAgents)
+            foreach (var definition in startingAgents)
             {
-                if (template != null)
-                    agents.Add(new RuntimeAgent(template));
+                if (definition != null)
+                    agents.Add(new RuntimeAgent(definition));
             }
         }
 
@@ -110,25 +110,41 @@ public class AgentRoster : MonoBehaviour
         OnRosterChanged?.Invoke();
     }
 
-    public void RecruitAgent(AgentData template)
+    public RuntimeAgent RecruitAgent(RecruitmentCandidateDefinition definition)
     {
-        if (template == null) return;
+        if (definition == null)
+            return null;
 
-        agents.Add(new RuntimeAgent(template));
+        RuntimeAgent recruitedAgent = new RuntimeAgent(definition);
+        agents.Add(recruitedAgent);
         OnRosterChanged?.Invoke();
+        return recruitedAgent;
     }
 
-    public void RecruitCandidate(PendingRecruitCandidate candidate)
+    public RuntimeAgent RecruitCandidate(PendingRecruitCandidate candidate)
     {
-        if (candidate == null) return;
+        return RecruitCandidate(candidate, 1);
+    }
 
-        agents.Add(new RuntimeAgent(
-            candidate.Template,
+    public RuntimeAgent RecruitCandidate(
+        PendingRecruitCandidate candidate,
+        int rookieMissionsRequired)
+    {
+        if (candidate == null)
+            return null;
+
+        RuntimeAgent recruitedAgent = new RuntimeAgent(
+            candidate.Definition,
             candidate.CandidateName,
             candidate.INT,
             candidate.STR,
-            candidate.AGI));
+            candidate.AGI,
+            true,
+            rookieMissionsRequired);
+
+        agents.Add(recruitedAgent);
 
         OnRosterChanged?.Invoke();
+        return recruitedAgent;
     }
 }

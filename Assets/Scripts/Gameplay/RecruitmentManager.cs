@@ -1,4 +1,3 @@
-// Assets/Scripts/Gameplay/RecruitmentManager.cs
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -9,19 +8,73 @@ public class RecruitmentManager : MonoBehaviour
     [SerializeField] private AgentRoster agentRoster;
     [SerializeField] private GameState gameState;
 
-    [Header("Fallback Candidate Pool")]
-    [Tooltip("Used when a recruit-style mission succeeds but the mission itself has no candidate pool assigned.")]
-    [SerializeField] private AgentData[] fallbackCandidatePool;
+    [Header("Recruitment Intel")]
+    [SerializeField] private BaseProgressionManager baseProgression;
+    [SerializeField] private RecruitmentDossierConfig dossierConfig;
+
+    [Header("Phase 4 Vetting")]
+    [Min(0)]
+    [SerializeField] private int rookieMissionStatPenalty = 1;
+    [Min(1)]
+    [SerializeField] private int rookieMissionsToGraduate = 1;
+    [Range(0f, 0.75f)]
+    [SerializeField] private float implantMissionSuccessPenalty = 0.2f;
+    [Min(0)]
+    [SerializeField] private int implantPenaltyMissionCount = 3;
 
     private readonly List<PendingRecruitCandidate> pendingCandidates = new();
+    private readonly HashSet<RecruitmentCandidateDefinition> surfacedThisRun = new();
+
+    private int lastKnownRecruitmentCenterLevel = -1;
+    private int remainingImplantPenaltyMissions;
 
     public IReadOnlyList<PendingRecruitCandidate> PendingCandidates => pendingCandidates;
     public int PendingCount => pendingCandidates.Count;
     public bool HasPendingCandidates => pendingCandidates.Count > 0;
+    public int RookieMissionStatPenalty => Mathf.Max(0, rookieMissionStatPenalty);
+    public int RookieMissionsToGraduate => Mathf.Max(1, rookieMissionsToGraduate);
+    public int RemainingImplantPenaltyMissions => remainingImplantPenaltyMissions;
+    public bool HasActiveImplantPenalty =>
+        implantMissionSuccessPenalty > 0f && remainingImplantPenaltyMissions > 0;
+
+    public float CurrentImplantMissionSuccessPenalty =>
+        HasActiveImplantPenalty
+            ? Mathf.Max(0f, implantMissionSuccessPenalty)
+            : 0f;
+
+    public int RecruitmentCenterLevel =>
+        dossierConfig != null
+            ? dossierConfig.GetRecruitmentCenterLevel(baseProgression)
+            : 0;
+
+    public int VerifiedFactRevealCount =>
+        dossierConfig != null
+            ? dossierConfig.GetVerifiedFactRevealCount(baseProgression)
+            : 0;
+
+    public string HiddenFactPlaceholder =>
+        dossierConfig != null
+            ? dossierConfig.GetHiddenFactPlaceholder()
+            : "???";
 
     public event Action OnPendingCandidatesChanged;
+    public event Action OnRecruitmentIntelChanged;
     public event Action<PendingRecruitCandidate> OnCandidateArrived;
-    public event Action<PendingRecruitCandidate, CandidateVettingOutcome> OnCandidateResolved;
+    public event Action<PendingRecruitCandidate, RecruitmentResolutionOutcome> OnCandidateResolved;
+
+    private void OnEnable()
+    {
+        if (baseProgression != null)
+            baseProgression.OnBuildingStateChanged += OnBuildingStateChanged;
+
+        lastKnownRecruitmentCenterLevel = RecruitmentCenterLevel;
+    }
+
+    private void OnDisable()
+    {
+        if (baseProgression != null)
+            baseProgression.OnBuildingStateChanged -= OnBuildingStateChanged;
+    }
 
     public PendingRecruitCandidate CreateCandidateFromMission(
         MissionData mission,
@@ -30,17 +83,18 @@ public class RecruitmentManager : MonoBehaviour
         if (mission == null)
             return null;
 
-        AgentData template = PickCandidateTemplate(mission);
-        if (template == null)
+        RecruitmentCandidateDefinition definition = PickCandidateDefinition(mission);
+        if (definition == null)
         {
             Debug.LogWarning(
-                "RecruitmentManager: Recruit mission succeeded but no candidate template was available.",
+                $"RecruitmentManager: Recruit mission '{mission.missionName}' did not surface a valid authored candidate.",
                 this);
             return null;
         }
 
-        var candidate = new PendingRecruitCandidate(template, mission, district);
+        var candidate = new PendingRecruitCandidate(definition, mission, district);
         pendingCandidates.Add(candidate);
+        surfacedThisRun.Add(definition);
 
         OnPendingCandidatesChanged?.Invoke();
         OnCandidateArrived?.Invoke(candidate);
@@ -48,35 +102,80 @@ public class RecruitmentManager : MonoBehaviour
         return candidate;
     }
 
-    public CandidateVettingOutcome EvaluateCandidatePlaceholder(
-        PendingRecruitCandidate candidate)
+    public RecruitmentResolutionOutcome JudgeCandidate(
+        PendingRecruitCandidate candidate,
+        CandidateVettingOutcome judgment)
     {
         if (candidate == null)
-            return CandidateVettingOutcome.None;
+            return RecruitmentResolutionOutcome.None;
+
+        if (judgment == CandidateVettingOutcome.None)
+            return RecruitmentResolutionOutcome.None;
 
         if (gameState != null && gameState.IsRunEnded)
-            return CandidateVettingOutcome.None;
+            return RecruitmentResolutionOutcome.None;
 
-        bool isLoyal = UnityEngine.Random.value < 0.5f;
-        return ResolveCandidate(candidate, isLoyal);
+        return ResolveCandidate(candidate, judgment);
     }
 
-    public CandidateVettingOutcome ResolveCandidate(
-        PendingRecruitCandidate candidate,
-        bool isLoyal)
+    public RecruitmentVerifiedFactView[] GetVerifiedIntelFor(PendingRecruitCandidate candidate)
     {
         if (candidate == null)
-            return CandidateVettingOutcome.None;
+            return Array.Empty<RecruitmentVerifiedFactView>();
+
+        return candidate.GetVerifiedIntel(VerifiedFactRevealCount, HiddenFactPlaceholder);
+    }
+
+    public void ClearRunState()
+    {
+        pendingCandidates.Clear();
+        surfacedThisRun.Clear();
+        remainingImplantPenaltyMissions = 0;
+        OnPendingCandidatesChanged?.Invoke();
+    }
+
+    public float ConsumeImplantMissionSuccessPenalty()
+    {
+        if (!HasActiveImplantPenalty)
+            return 0f;
+
+        remainingImplantPenaltyMissions = Mathf.Max(0, remainingImplantPenaltyMissions - 1);
+        return Mathf.Max(0f, implantMissionSuccessPenalty);
+    }
+
+    public string GetActiveImplantPenaltySummary()
+    {
+        if (!HasActiveImplantPenalty)
+            return string.Empty;
+
+        string missionLabel = remainingImplantPenaltyMissions == 1 ? "mission" : "missions";
+        return
+            $"-{CurrentImplantMissionSuccessPenalty * 100f:F0}% mission success for the next {remainingImplantPenaltyMissions} {missionLabel}";
+    }
+
+    private RecruitmentResolutionOutcome ResolveCandidate(
+        PendingRecruitCandidate candidate,
+        CandidateVettingOutcome judgment)
+    {
+        if (candidate == null)
+            return RecruitmentResolutionOutcome.None;
 
         if (!pendingCandidates.Remove(candidate))
-            return CandidateVettingOutcome.None;
+            return RecruitmentResolutionOutcome.None;
 
-        CandidateVettingOutcome outcome = isLoyal
-            ? CandidateVettingOutcome.Loyal
-            : CandidateVettingOutcome.Implant;
+        RecruitmentResolutionOutcome outcome = candidate.GetResolutionOutcome(judgment);
 
-        if (outcome == CandidateVettingOutcome.Loyal && agentRoster != null)
-            agentRoster.RecruitCandidate(candidate);
+        switch (outcome)
+        {
+            case RecruitmentResolutionOutcome.LoyalAccepted:
+                if (agentRoster != null)
+                    agentRoster.RecruitCandidate(candidate, RookieMissionsToGraduate);
+                break;
+
+            case RecruitmentResolutionOutcome.ImplantAccepted:
+                ApplyImplantPenalty();
+                break;
+        }
 
         OnPendingCandidatesChanged?.Invoke();
         OnCandidateResolved?.Invoke(candidate, outcome);
@@ -84,27 +183,61 @@ public class RecruitmentManager : MonoBehaviour
         return outcome;
     }
 
-    private AgentData PickCandidateTemplate(MissionData mission)
+    private void OnBuildingStateChanged(RuntimeBuilding runtimeBuilding)
     {
-        AgentData[] sourcePool =
-            mission.candidatePool != null && mission.candidatePool.Length > 0
-                ? mission.candidatePool
-                : fallbackCandidatePool;
+        int currentLevel = RecruitmentCenterLevel;
+        if (currentLevel == lastKnownRecruitmentCenterLevel)
+            return;
 
-        if (sourcePool == null || sourcePool.Length == 0)
+        lastKnownRecruitmentCenterLevel = currentLevel;
+        OnRecruitmentIntelChanged?.Invoke();
+    }
+
+    private RecruitmentCandidateDefinition PickCandidateDefinition(MissionData mission)
+    {
+        if (mission == null)
             return null;
 
-        var validPool = new List<AgentData>();
-        foreach (var candidate in sourcePool)
+        RecruitmentCandidateDefinition candidate = mission.rewardCandidate;
+        if (candidate == null)
+            return null;
+
+        if (!candidate.isAvailable)
+            return null;
+
+        if (IsPending(candidate))
+            return null;
+
+        if (surfacedThisRun.Contains(candidate))
+            return null;
+
+        return candidate;
+    }
+
+    private bool IsPending(RecruitmentCandidateDefinition definition)
+    {
+        for (int i = 0; i < pendingCandidates.Count; i++)
         {
-            if (candidate != null)
-                validPool.Add(candidate);
+            if (pendingCandidates[i].Definition == definition)
+                return true;
         }
 
-        if (validPool.Count == 0)
-            return null;
+        return false;
+    }
 
-        int index = UnityEngine.Random.Range(0, validPool.Count);
-        return validPool[index];
+    private void ApplyImplantPenalty()
+    {
+        if (implantPenaltyMissionCount <= 0 || implantMissionSuccessPenalty <= 0f)
+            return;
+
+        remainingImplantPenaltyMissions += implantPenaltyMissionCount;
+    }
+
+    private void OnValidate()
+    {
+        rookieMissionStatPenalty = Mathf.Max(0, rookieMissionStatPenalty);
+        rookieMissionsToGraduate = Mathf.Max(1, rookieMissionsToGraduate);
+        implantMissionSuccessPenalty = Mathf.Clamp(implantMissionSuccessPenalty, 0f, 0.75f);
+        implantPenaltyMissionCount = Mathf.Max(0, implantPenaltyMissionCount);
     }
 }

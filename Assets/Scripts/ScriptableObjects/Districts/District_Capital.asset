@@ -19,6 +19,8 @@ MonoBehaviour:
   populationWeight: 10
   startingChaos: 0
   startingCure: 0
+  startingHeat: 0
   missions:
   - {fileID: 11400000, guid: 606a16ca84173c44381e4992664c68b8, type: 2}
+  - {fileID: 11400000, guid: 8cfe84a7c9baa4a428510232e8ac573d, type: 2}
   - {fileID: 11400000, guid: 3092ddd778c86a6408cd8dfac18e94eb, type: 2}

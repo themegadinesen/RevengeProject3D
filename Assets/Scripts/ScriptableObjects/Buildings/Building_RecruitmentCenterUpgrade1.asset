@@ -10,14 +10,15 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b5c43670f4771a345a82e509d649bc4b, type: 3}
-  m_Name: Building_RecruitmentCenter
+  m_Name: Building_RecruitmentCenterUpgrade1
   m_EditorClassIdentifier: Assembly-CSharp::BuildingData
   buildingName: Recruitment Center
   description: recruits
   moneyCost: 100
   buildTime: 10
   unlocksDomain: 0
-  prerequisites: []
+  prerequisites:
+  - {fileID: 11400000, guid: 613e41169f3098547a37cdc68f170391, type: 2}
   agentCapacityBonus: 0
   missionSuccessBonus: 0
   moneyGainBonus: 0

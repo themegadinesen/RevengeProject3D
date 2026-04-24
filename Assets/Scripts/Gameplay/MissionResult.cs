@@ -7,6 +7,9 @@ public class MissionResult
     public bool Success;
     public float Score;
     public float SuccessChance;
+    public float TraitSuccessChanceBonus;
+    public float ImplantSuccessPenaltyApplied;
+    public int RemainingImplantPenaltyMissions;
     public float DistrictCureMultiplier;
     public float BonusAgentLossChance;
     public float DistrictHeatBeforeOutcome;

@@ -13,9 +13,9 @@ MonoBehaviour:
   m_Name: Building_HQ
   m_EditorClassIdentifier: Assembly-CSharp::BuildingData
   buildingName: Headquarters
-  description: 
+  description: HQ
   moneyCost: 0
-  buildTime: 30
+  buildTime: 5
   unlocksDomain: 0
   prerequisites: []
   agentCapacityBonus: 0

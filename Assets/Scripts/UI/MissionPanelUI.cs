@@ -283,13 +283,24 @@ public class MissionPanelUI : MonoBehaviour
         float pressure = missionManager.GetDistrictInvestigationPressure(activeDistrict);
 
         txtDistrictRisk.gameObject.SetActive(true);
+        string sabotageLine = string.Empty;
+        float sabotagePenalty = missionManager.GetRecruitmentSabotagePenaltyPreview();
+        int sabotageMissions = missionManager.GetRemainingImplantPenaltyMissions();
+        if (sabotagePenalty > 0f && sabotageMissions > 0)
+        {
+            string missionLabel = sabotageMissions == 1 ? "mission" : "missions";
+            sabotageLine =
+                $"\nRecruitment Risk: -{sabotagePenalty * 100f:F0}% success for next {sabotageMissions} {missionLabel}";
+        }
+
         txtDistrictRisk.text =
             $"District Risk — Heat {activeDistrict.LocalHeat:F1}/{activeDistrict.MaxHeat:F0}  |  " +
             $"State: {responseState}  |  " +
             $"Success Penalty: -{successPenalty * 100f:F0}%  |  " +
             $"Cure x{cureMultiplier:F2}  |  " +
             $"Extra Loss: {extraLossChance * 100f:F0}%  |  " +
-            $"Pressure: +{pressure:F1}/s";
+            $"Pressure: +{pressure:F1}/s" +
+            sabotageLine;
     }
 
     private void RefreshInfraStatus(MissionData m)
@@ -342,7 +353,11 @@ public class MissionPanelUI : MonoBehaviour
         {
             AgentSlotUI slot = Instantiate(agentSlotPrefab, agentListContent);
             bool isSelected  = selectedAgents.Contains(agent);
-            slot.Setup(agent, isSelected, OnAgentClicked);
+            slot.Setup(
+                agent,
+                isSelected,
+                OnAgentClicked,
+                missionManager != null ? missionManager.GetRookieMissionStatPenalty() : 0);
             spawnedAgentSlots.Add(slot);
         }
     }
@@ -366,13 +381,7 @@ public class MissionPanelUI : MonoBehaviour
     {
         MissionData m = currentMissions[selectedIndex];
 
-        int tINT = 0, tSTR = 0, tAGI = 0;
-        foreach (var a in selectedAgents)
-        {
-            tINT += a.INT;
-            tSTR += a.STR;
-            tAGI += a.AGI;
-        }
+        missionManager.GetMissionTeamTotals(selectedAgents, out int tINT, out int tSTR, out int tAGI);
 
         if (txtTeamTotals != null)
         {
@@ -390,14 +399,25 @@ public class MissionPanelUI : MonoBehaviour
         {
             if (selectedAgents.Count > 0)
             {
-                float score  = MissionManager.CalculateScoreFromTotals(
-                                   tINT, tSTR, tAGI, m);
+                float score = MissionManager.CalculateScoreFromTotals(tINT, tSTR, tAGI, m);
                 float baseChance = missionManager.GetBaseSuccessChance(score);
+                float traitBonus = missionManager.GetTeamTraitSuccessChanceBonus(selectedAgents);
                 float heatPenalty = missionManager.GetDistrictSuccessChancePenalty(activeDistrict);
-                float chance = missionManager.GetSuccessChance(score, activeDistrict);
+                float sabotagePenalty = missionManager.GetRecruitmentSabotagePenaltyPreview();
+                float chance = missionManager.GetTeamSuccessChance(score, selectedAgents, activeDistrict);
                 float durMul = missionManager.GetDurationMultiplier(score);
                 float rewMul = missionManager.GetRewardMultiplier(score);
                 DistrictResponseState responseState = missionManager.GetDistrictResponseState(activeDistrict);
+                string successBreakdown = $"Base {baseChance * 100f:F0}%";
+
+                if (traitBonus > 0f)
+                    successBreakdown += $"  + Trait {traitBonus * 100f:F0}%";
+
+                if (heatPenalty > 0f)
+                    successBreakdown += $"  - Risk {heatPenalty * 100f:F0}%";
+
+                if (sabotagePenalty > 0f)
+                    successBreakdown += $"  - Sabotage {sabotagePenalty * 100f:F0}%";
 
                 string durText = m.duration > 0f
                     ? $"~{m.duration * durMul:F0}s"
@@ -406,7 +426,7 @@ public class MissionPanelUI : MonoBehaviour
                 txtScorePreview.gameObject.SetActive(true);
                 txtScorePreview.text =
                     $"Score: {score * 100f:F0}%  |  " +
-                    $"Success: {chance * 100f:F0}% (Base {baseChance * 100f:F0}%  -  Risk {heatPenalty * 100f:F0}%)  |  " +
+                    $"Success: {chance * 100f:F0}% ({successBreakdown})  |  " +
                     $"State: {responseState}  |  " +
                     $"Duration: {durText}  |  " +
                     $"Reward: x{rewMul:F1}";
@@ -473,6 +493,8 @@ public class MissionPanelUI : MonoBehaviour
                 ? "(Chaos applied during op)"
                 : $"+{m.chaosOnSuccess} Chaos";
 
+            string modifierLine = BuildResultModifierLine(result);
+
             string heatLine = result.District != null
                 ? $"\nHeat: {result.DistrictHeatBeforeOutcome:F1} -> {result.DistrictHeatAfterOutcome:F1} ({result.ResponseState})"
                 : "";
@@ -481,6 +503,7 @@ public class MissionPanelUI : MonoBehaviour
                 $"<b>{districtLabel}{m.missionName}</b>\n" +
                 $"<color=green>SUCCESS!</color>  " +
                 $"(Score: {result.Score * 100f:F0}%  |  Chance Used: {result.SuccessChance * 100f:F0}%)\n" +
+                modifierLine +
                 $"{chaosLine}\n" +
                 $"+${result.ActualMoneyReward} Money" +
                 heatLine;
@@ -495,6 +518,8 @@ public class MissionPanelUI : MonoBehaviour
                 lostLine = $"Lost: {string.Join(", ", names)}";
             }
 
+            string modifierLine = BuildResultModifierLine(result);
+
             string heatLine = result.District != null
                 ? $"\nHeat: {result.DistrictHeatBeforeOutcome:F1} -> {result.DistrictHeatAfterOutcome:F1} ({result.ResponseState})"
                 : "";
@@ -503,6 +528,7 @@ public class MissionPanelUI : MonoBehaviour
                 $"<b>{districtLabel}{m.missionName}</b>\n" +
                 $"<color=red>FAILED</color>  " +
                 $"(Score: {result.Score * 100f:F0}%  |  Chance Used: {result.SuccessChance * 100f:F0}%)\n" +
+                modifierLine +
                 $"{lostLine}\n" +
                 $"+{m.chaosOnFailure} Chaos  +{m.cureOnFailure} Cure" +
                 heatLine;
@@ -513,5 +539,24 @@ public class MissionPanelUI : MonoBehaviour
     {
         resultOverlay.SetActive(false);
         RefreshDisplay();
+    }
+
+    private static string BuildResultModifierLine(MissionResult result)
+    {
+        List<string> parts = new();
+
+        if (result.TraitSuccessChanceBonus > 0f)
+            parts.Add($"Trait +{result.TraitSuccessChanceBonus * 100f:F0}%");
+
+        if (result.ImplantSuccessPenaltyApplied > 0f)
+        {
+            string missionLabel = result.RemainingImplantPenaltyMissions == 1 ? "mission" : "missions";
+            parts.Add(
+                $"Sabotage -{result.ImplantSuccessPenaltyApplied * 100f:F0}% ({result.RemainingImplantPenaltyMissions} {missionLabel} remain)");
+        }
+
+        return parts.Count > 0
+            ? $"{string.Join("  |  ", parts)}\n"
+            : string.Empty;
     }
 }

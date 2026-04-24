@@ -18,13 +18,27 @@ public class AgentSlotUI : MonoBehaviour
     private RuntimeAgent agent;
     private Action<RuntimeAgent> onClicked;
 
-    public void Setup(RuntimeAgent agent, bool selected, Action<RuntimeAgent> onClick)
+    public void Setup(
+        RuntimeAgent agent,
+        bool selected,
+        Action<RuntimeAgent> onClick,
+        int rookieStatPenalty)
     {
         this.agent     = agent;
         this.onClicked = onClick;
 
-        txtName.text  = agent.Name;
-        txtStats.text = $"INT {agent.INT}   STR {agent.STR}   AGI {agent.AGI}";
+        string rookieLabel = agent.IsRookie ? " (Rookie)" : "";
+        txtName.text = $"{agent.Name}{rookieLabel}";
+
+        int missionINT = agent.GetMissionINT(rookieStatPenalty);
+        int missionSTR = agent.GetMissionSTR(rookieStatPenalty);
+        int missionAGI = agent.GetMissionAGI(rookieStatPenalty);
+
+        txtStats.text = $"INT {missionINT}   STR {missionSTR}   AGI {missionAGI}";
+
+        string modifierSummary = agent.GetMissionModifierSummary(rookieStatPenalty);
+        if (!string.IsNullOrWhiteSpace(modifierSummary))
+            txtStats.text += $"\n{modifierSummary}";
 
         background.color = selected ? selectedColor : normalColor;
 

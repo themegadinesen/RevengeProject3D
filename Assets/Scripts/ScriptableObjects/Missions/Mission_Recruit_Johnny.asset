@@ -10,9 +10,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ba3ee8f8f8f5fdd4598ac86ccc7aecd7, type: 3}
-  m_Name: Mission_Recruit
+  m_Name: Mission_Recruit_Johnny
   m_EditorClassIdentifier: Assembly-CSharp::MissionData
-  missionName: Recruit Agent
+  missionName: Recruit Agent Johnny
   description: 
   moneyCost: 100
   requiredINT: 4
@@ -20,14 +20,15 @@ MonoBehaviour:
   requiredAGI: 1
   requiredDomain: 0
   requiredBuilding: {fileID: 11400000, guid: 6e15a02f17acc0c48a0a2c12b86eeb9a, type: 2}
-  duration: 30
+  duration: 10
   behavior: 0
   specialReward: 1
-  candidatePool:
-  - {fileID: 11400000, guid: daf3cebd6e79a5f42a8e92a5da390e90, type: 2}
+  rewardCandidate: {fileID: 11400000, guid: 520de23d3fb518146a3747f06702afc2, type: 2}
   chaosOnSuccess: 3
+  heatOnSuccess: 8
   cureOnSuccess: 0
   moneyOnSuccess: 0
   chaosOnFailure: 0
+  heatOnFailure: 12
   cureOnFailure: 10
   agentsLostOnFailure: 0

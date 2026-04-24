@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Building_Railway
   m_EditorClassIdentifier: Assembly-CSharp::BuildingData
   buildingName: Railway Hub
-  description: 
+  description: Rails
   moneyCost: 100
   buildTime: 30
   unlocksDomain: 1

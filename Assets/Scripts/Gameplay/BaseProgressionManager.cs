@@ -205,7 +205,8 @@ public class BaseProgressionManager : MonoBehaviour
 
     public bool IsBuildingBuilt(BuildingData data)
     {
-        if (data == null) return true; // no requirement
+        if (data == null) return true;
+        if (allBuildings == null || runtimeBuildings == null) return false;
         RuntimeBuilding rb = GetRuntimeBuilding(data);
         return rb != null && rb.State == BuildingState.Built;
     }
@@ -223,8 +224,13 @@ public class BaseProgressionManager : MonoBehaviour
     public RuntimeBuilding GetRuntimeBuilding(BuildingData data)
     {
         if (data == null) return null;
-        for (int i = 0; i < allBuildings.Length; i++)
-            if (allBuildings[i] == data) return runtimeBuildings[i];
+        if (allBuildings == null || runtimeBuildings == null) return null;
+        int count = Mathf.Min(allBuildings.Length, runtimeBuildings.Length);
+        for (int i = 0; i < count; i++)
+        {
+            if (allBuildings[i] == data)
+                return runtimeBuildings[i];
+        }
         return null;
     }
 

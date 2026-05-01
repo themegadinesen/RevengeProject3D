@@ -8,11 +8,27 @@ public class AgentRoster : MonoBehaviour
     [Tooltip("Authored agent definitions spawned at game start.")]
     [SerializeField] private RecruitmentCandidateDefinition[] startingAgents;
 
+    [Header("Capacity")]
+    [Tooltip("Roster slots available before base building bonuses are applied.")]
+    [Min(1)]
+    [SerializeField] private int baseAgentCapacity = 4;
+    [Tooltip("Optional. Built base upgrades add their TotalAgentCapacityBonus to the roster cap.")]
+    [SerializeField] private BaseProgressionManager baseProgression;
+
     private readonly List<RuntimeAgent> agents = new();
+    private bool subscribedToBaseProgression;
 
     public IReadOnlyList<RuntimeAgent> AllAgents => agents;
 
     public event Action OnRosterChanged;
+
+    public int AgentCapacity =>
+        Mathf.Max(1, baseAgentCapacity) +
+        (baseProgression != null ? Mathf.Max(0, baseProgression.TotalAgentCapacityBonus) : 0);
+
+    public int ActiveAgentCount => TotalCount;
+
+    public bool HasCapacityForRecruit => ActiveAgentCount < AgentCapacity;
 
     public int TotalCount
     {
@@ -22,6 +38,21 @@ public class AgentRoster : MonoBehaviour
             foreach (var agent in agents)
             {
                 if (agent.Status != AgentStatus.Lost)
+                    count++;
+            }
+
+            return count;
+        }
+    }
+
+    public int LostCount
+    {
+        get
+        {
+            int count = 0;
+            foreach (var agent in agents)
+            {
+                if (agent.Status == AgentStatus.Lost)
                     count++;
             }
 
@@ -57,6 +88,22 @@ public class AgentRoster : MonoBehaviour
 
             return count;
         }
+    }
+
+    private void Awake()
+    {
+        ResolveBaseProgression();
+    }
+
+    private void OnEnable()
+    {
+        ResolveBaseProgression();
+        SubscribeToBaseProgression();
+    }
+
+    private void OnDisable()
+    {
+        UnsubscribeFromBaseProgression();
     }
 
     private void Start()
@@ -115,6 +162,9 @@ public class AgentRoster : MonoBehaviour
         if (definition == null)
             return null;
 
+        if (!HasCapacityForRecruit)
+            return null;
+
         RuntimeAgent recruitedAgent = new RuntimeAgent(definition);
         agents.Add(recruitedAgent);
         OnRosterChanged?.Invoke();
@@ -133,6 +183,9 @@ public class AgentRoster : MonoBehaviour
         if (candidate == null)
             return null;
 
+        if (!HasCapacityForRecruit)
+            return null;
+
         RuntimeAgent recruitedAgent = new RuntimeAgent(
             candidate.Definition,
             candidate.CandidateName,
@@ -146,5 +199,41 @@ public class AgentRoster : MonoBehaviour
 
         OnRosterChanged?.Invoke();
         return recruitedAgent;
+    }
+
+    private void ResolveBaseProgression()
+    {
+        if (baseProgression != null)
+            return;
+
+        baseProgression = FindFirstObjectByType<BaseProgressionManager>();
+    }
+
+    private void SubscribeToBaseProgression()
+    {
+        if (subscribedToBaseProgression || baseProgression == null)
+            return;
+
+        baseProgression.OnBuildingStateChanged += OnBuildingStateChanged;
+        subscribedToBaseProgression = true;
+    }
+
+    private void UnsubscribeFromBaseProgression()
+    {
+        if (!subscribedToBaseProgression || baseProgression == null)
+            return;
+
+        baseProgression.OnBuildingStateChanged -= OnBuildingStateChanged;
+        subscribedToBaseProgression = false;
+    }
+
+    private void OnBuildingStateChanged(RuntimeBuilding runtimeBuilding)
+    {
+        OnRosterChanged?.Invoke();
+    }
+
+    private void OnValidate()
+    {
+        baseAgentCapacity = Mathf.Max(1, baseAgentCapacity);
     }
 }

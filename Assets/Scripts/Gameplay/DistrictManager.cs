@@ -5,6 +5,7 @@ using UnityEngine;
 public class DistrictManager : MonoBehaviour
 {
     [SerializeField] private GameState gameState;
+    [SerializeField] private GameCalendar gameCalendar;
 
     private bool hasLoggedMissingHeatConfig;
 
@@ -52,6 +53,16 @@ public class DistrictManager : MonoBehaviour
     public float MaxLocalHeat  => heatConfig != null ? heatConfig.maxHeat : 100f;
 
     // ── Lifecycle ─────────────────────────────────────────────────────
+    private void Reset()
+    {
+        ResolveReferences();
+    }
+
+    private void Awake()
+    {
+        ResolveReferences();
+    }
+
     private void Start()
     {
         runtimeDistricts = new RuntimeDistrict[allDistricts.Length];
@@ -77,6 +88,7 @@ public class DistrictManager : MonoBehaviour
     private void Update()
     {
         if (gameState.IsRunEnded) return;
+        if (gameCalendar != null && gameCalendar.IsPaused) return;
 
         CheckUnlocks();
         TickAllDistricts();
@@ -239,5 +251,11 @@ public class DistrictManager : MonoBehaviour
         float globalCure  = totalWeight > 0f ? weightedCure  / totalWeight : 0f;
 
         gameState.SetDistrictValues(globalChaos, globalCure, totalPeople);
+    }
+
+    private void ResolveReferences()
+    {
+        if (gameCalendar == null)
+            gameCalendar = FindFirstObjectByType<GameCalendar>();
     }
 }

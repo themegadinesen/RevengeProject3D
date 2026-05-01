@@ -124,7 +124,7 @@ public class HUDController : MonoBehaviour
         if (viewManager == null)
             return true;
 
-        return viewManager.CurrentState == ViewManager.ViewState.Base;
+        return viewManager.IsBaseInteractionView;
     }
 
     private void OnBaseButtonClicked()

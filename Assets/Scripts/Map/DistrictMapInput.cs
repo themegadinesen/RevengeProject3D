@@ -17,15 +17,30 @@ public class DistrictMapInput : MonoBehaviour
     [SerializeField] private DistrictManager   districtManager;
     [SerializeField] private DistrictHoverUI   hoverUI;
     [SerializeField] private DistrictDetailsPanel detailsPanel;
+    [SerializeField] private MapDistrictFocusController focusController;
 
     [Header("Raycast")]
     [Tooltip("Layer(s) your district GameObjects are on.")]
     [SerializeField] private LayerMask districtLayer;
 
+    [Header("Visuals")]
+    [Tooltip("When enabled and a focus controller is assigned, hover dimming/highlighting is handled by the map mask shader instead of district overlay sprites.")]
+    [SerializeField] private bool useMaskFocusVisuals = true;
+
     // ── Runtime ───────────────────────────────────────────────────────
     private DistrictMapNode[] allNodes;
     private DistrictMapNode   hoveredNode;
     private DistrictMapNode   selectedNode;
+
+    private void Reset()
+    {
+        ResolveReferences();
+    }
+
+    private void Awake()
+    {
+        ResolveReferences();
+    }
 
     private void Start()
     {
@@ -34,15 +49,15 @@ public class DistrictMapInput : MonoBehaviour
 
     private void Update()
     {
-        // Only process in Map view.
-        if (viewManager.CurrentState != ViewManager.ViewState.Map)
+        // Only process in the fully interactive Map view.
+        if (viewManager != null && !viewManager.IsMapInteractionView)
         {
             ClearHover();
             if (selectedNode != null) CloseDetails();
             return;
         }
 
-        if (gameState.IsRunEnded)
+        if (gameState != null && gameState.IsRunEnded)
         {
             ClearHover();
             return;
@@ -88,7 +103,12 @@ public class DistrictMapInput : MonoBehaviour
     // ── Hover ─────────────────────────────────────────────────────────
     private void SetHovered(DistrictMapNode node, Vector2 screenPos)
     {
-        hoveredNode = node;
+        if (hoveredNode != node)
+        {
+            hoveredNode = node;
+            if (focusController != null)
+                focusController.FocusDistrict(node);
+        }
 
         RuntimeDistrict rd = districtManager.GetRuntimeDistrict(node.Data);
         if (rd != null)
@@ -98,7 +118,10 @@ public class DistrictMapInput : MonoBehaviour
     private void ClearHover()
     {
         if (hoveredNode == null) return;
+        DistrictMapNode oldHoveredNode = hoveredNode;
         hoveredNode = null;
+        if (focusController != null)
+            focusController.ClearFocus(oldHoveredNode);
         hoverUI.Hide();
     }
 
@@ -122,15 +145,32 @@ public class DistrictMapInput : MonoBehaviour
     private void UpdateNodeVisuals()
     {
         bool isHovering = hoveredNode != null;
+        bool shaderFocusActive = useMaskFocusVisuals &&
+                                 focusController != null &&
+                                 focusController.isActiveAndEnabled;
 
         for (int i = 0; i < allNodes.Length; i++)
         {
             DistrictMapNode node = allNodes[i];
             RuntimeDistrict rd   = districtManager.GetRuntimeDistrict(node.Data);
 
+            if (shaderFocusActive && isHovering)
+            {
+                node.SetVisualState(DistrictVisualState.Hidden);
+                continue;
+            }
+
             if (rd == null || !rd.IsUnlocked)
             {
                 node.SetVisualState(DistrictVisualState.Locked);
+                continue;
+            }
+
+            if (shaderFocusActive)
+            {
+                node.SetVisualState(node == selectedNode
+                    ? DistrictVisualState.Selected
+                    : DistrictVisualState.Normal);
                 continue;
             }
 
@@ -143,5 +183,14 @@ public class DistrictMapInput : MonoBehaviour
             else
                 node.SetVisualState(DistrictVisualState.Normal);
         }
+    }
+
+    private void ResolveReferences()
+    {
+        if (cam == null)
+            cam = Camera.main;
+
+        if (focusController == null)
+            focusController = FindFirstObjectByType<MapDistrictFocusController>();
     }
 }

@@ -12,10 +12,6 @@ public class CameraController : MonoBehaviour
     [SerializeField] private ZoomAnchor currentAnchor;
 
     [Header("Input Actions")]
-    [SerializeField] private InputAction scrollAction = new InputAction(
-        "Scroll", InputActionType.Value, "<Mouse>/scroll/y"
-    );
-
     [SerializeField] private InputAction panButtonAction = new InputAction(
         "PanButton", InputActionType.Button, "<Mouse>/middleButton"
     );
@@ -73,21 +69,18 @@ public class CameraController : MonoBehaviour
 
     private void OnEnable()
     {
-        scrollAction.Enable();
         panButtonAction.Enable();
         panDeltaAction.Enable();
     }
 
     private void OnDisable()
     {
-        scrollAction.Disable();
         panButtonAction.Disable();
         panDeltaAction.Disable();
     }
 
     private void Update()
     {
-        HandleScrollZoom();
         HandlePanInput();
         UpdateHomePosition();
         ApplySpringBack();
@@ -103,7 +96,7 @@ public class CameraController : MonoBehaviour
         }
 
         isInBaseView = true;
-        targetZoom = currentAnchor.GetFocusedMapZoom(config.defaultFocusedMapZoom);
+        targetZoom = GetAnchorFocusZoom();
         panOffset = Vector3.zero;
     }
 
@@ -134,7 +127,7 @@ public class CameraController : MonoBehaviour
 
         if (isInBaseView && currentAnchor != null)
         {
-            targetZoom = currentAnchor.GetFocusedMapZoom(config.defaultFocusedMapZoom);
+            targetZoom = GetAnchorFocusZoom();
         }
         else
         {
@@ -164,19 +157,9 @@ public class CameraController : MonoBehaviour
 
         if (cam != null)
             cam.orthographicSize = targetZoom;
-    }
 
-    private void HandleScrollZoom()
-    {
-        if (ShouldBlockRawInput()) return;
-
-        float scroll = scrollAction.ReadValue<float>();
-        if (Mathf.Approximately(scroll, 0f)) return;
-
-        scroll /= 120f;
-
-        targetZoom -= scroll * config.mapZoomStep;
-        targetZoom = ClampZoom(targetZoom);
+        UpdateHomePosition();
+        SnapToTargetPosition();
     }
 
     private void HandlePanInput()
@@ -207,7 +190,7 @@ public class CameraController : MonoBehaviour
             return;
         }
 
-        float focusedMapZoom = currentAnchor.GetFocusedMapZoom(config.defaultFocusedMapZoom);
+        float focusedMapZoom = GetAnchorFocusZoom();
         float blend = Mathf.InverseLerp(config.defaultMapZoom, focusedMapZoom, targetZoom);
 
         Vector3 anchorPosition = currentAnchor.transform.position;
@@ -246,9 +229,26 @@ public class CameraController : MonoBehaviour
         );
     }
 
+    private void SnapToTargetPosition()
+    {
+        Vector3 desiredPosition = homePosition + panOffset;
+        desiredPosition.z = transform.position.z;
+        transform.position = desiredPosition;
+    }
+
     private float ClampZoom(float zoom)
     {
         return Mathf.Clamp(zoom, config.minMapZoom, config.maxMapZoom);
+    }
+
+    private float GetAnchorFocusZoom()
+    {
+        if (currentAnchor == null || config == null)
+            return targetZoom;
+
+        float focusedMapZoom = currentAnchor.GetFocusedMapZoom(config.defaultFocusedMapZoom);
+        float handoffMapZoom = Mathf.Min(focusedMapZoom, config.mapToBaseTransitionZoom);
+        return ClampZoom(handoffMapZoom);
     }
 
     private bool ShouldBlockRawInput()

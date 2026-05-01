@@ -79,6 +79,15 @@ public class CameraZoomConfig : ScriptableObject
     [Range(1f, 20f)]
     public float baseMoveLerpSpeed = 8f;
 
+    [Header("Unified Zoom Feel")]
+    [Tooltip("Normalized zoom delta per mouse-wheel tick. Positive wheel input zooms from Map toward Top and Base.")]
+    [Range(0.005f, 2f)]
+    public float normalizedScrollSpeed = 0.08f;
+
+    [Tooltip("Smooth time used when travelling toward a new normalized zoom target.")]
+    [Range(0.01f, 1f)]
+    public float buttonTravelDuration = 0.18f;
+
     [Header("Base View Defaults")]
     [Tooltip("Default perspective field of view when entering base view.")]
     [Range(1f, 179f)]
@@ -96,7 +105,30 @@ public class CameraZoomConfig : ScriptableObject
     [Min(0f)]
     public float defaultTopDownHeightBoost = 6f;
 
-    [Header("Transition FX")]
+    [Header("Transition Polish")]
+    [Tooltip("Virtual zoom distance between the focused map view and the actual Top view swap. The player can stop inside this cloud band.")]
+    [Min(0f)]
+    public float mapToTopCloudTravelRange = 10f;
+
+    [Tooltip("Short hidden swap time at the end of the cloud band. The actual cloud dive length is controlled by Map To Top Cloud Travel Range.")]
+    [Range(0.05f, 4f)]
+    public float mapToTopHandoffDuration = 0.35f;
+
+    [Tooltip("Easing/pulse curve used during the Map <-> Top handoff.")]
+    public AnimationCurve mapToTopBlendCurve = new AnimationCurve(
+        new Keyframe(0f, 0f, 0f, 4f),
+        new Keyframe(0.5f, 1f, 0f, 0f),
+        new Keyframe(1f, 0f, -4f, 0f)
+    );
+
+    [Tooltip("Easing curve for the base camera's Top <-> Base tilt/FOV blend.")]
+    public AnimationCurve topToBaseBlendCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
+
+    [Tooltip("Strength of the Map <-> Top handoff effects. Set to 0 to disable blur and runtime cloud volume.")]
+    [Range(0f, 1f)]
+    public float transitionPulseStrength = 1f;
+
+    [Header("Legacy Transition FX")]
     [Range(0.05f, 1f)]
     public float peakBlurStrength = 0.4f;
 
@@ -135,5 +167,16 @@ public class CameraZoomConfig : ScriptableObject
         defaultTopDownBaseFieldOfView = Mathf.Clamp(defaultTopDownBaseFieldOfView, 1f, 179f);
         defaultBaseDistance = Mathf.Max(0.1f, defaultBaseDistance);
         defaultTopDownHeightBoost = Mathf.Max(0f, defaultTopDownHeightBoost);
+
+        normalizedScrollSpeed = Mathf.Max(0.005f, normalizedScrollSpeed);
+        buttonTravelDuration = Mathf.Max(0.01f, buttonTravelDuration);
+        mapToTopCloudTravelRange = Mathf.Max(0f, mapToTopCloudTravelRange);
+        mapToTopHandoffDuration = Mathf.Max(0.05f, mapToTopHandoffDuration);
+
+        if (mapToTopBlendCurve == null)
+            mapToTopBlendCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
+
+        if (topToBaseBlendCurve == null)
+            topToBaseBlendCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
     }
 }

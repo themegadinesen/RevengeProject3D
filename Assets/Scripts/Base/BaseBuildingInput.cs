@@ -24,7 +24,7 @@ public class BaseBuildingInput : MonoBehaviour
         if (cam == null || viewManager == null || baseProgression == null)
             return;
 
-        if (viewManager.CurrentState != ViewManager.ViewState.Base)
+        if (!viewManager.IsBaseInteractionView)
         {
             ClearSelection();
             return;

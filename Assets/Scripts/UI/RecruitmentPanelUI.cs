@@ -7,6 +7,8 @@ public class RecruitmentPanelUI : MonoBehaviour
 {
     [Header("References")]
     [SerializeField] private RecruitmentManager recruitmentManager;
+    [Tooltip("Optional. Used to show and enforce roster capacity while accepting loyal candidates.")]
+    [SerializeField] private AgentRoster agentRoster;
     [SerializeField] private GameState gameState;
 
     [Header("List")]
@@ -64,9 +66,12 @@ public class RecruitmentPanelUI : MonoBehaviour
 
     private PendingRecruitCandidate selectedCandidate;
     private string lastResultMessage = string.Empty;
+    private bool subscribedToRoster;
 
     private void OnEnable()
     {
+        ResolveAgentRoster();
+
         if (btnClose != null)
             btnClose.onClick.AddListener(Close);
 
@@ -82,6 +87,7 @@ public class RecruitmentPanelUI : MonoBehaviour
             recruitmentManager.OnRecruitmentIntelChanged += OnRecruitmentIntelChanged;
         }
 
+        SubscribeToRoster();
         RebuildList();
     }
 
@@ -101,6 +107,8 @@ public class RecruitmentPanelUI : MonoBehaviour
             recruitmentManager.OnPendingCandidatesChanged -= OnPendingCandidatesChanged;
             recruitmentManager.OnRecruitmentIntelChanged -= OnRecruitmentIntelChanged;
         }
+
+        UnsubscribeFromRoster();
     }
 
     public void Open()
@@ -123,6 +131,11 @@ public class RecruitmentPanelUI : MonoBehaviour
     }
 
     private void OnRecruitmentIntelChanged()
+    {
+        RefreshDetails();
+    }
+
+    private void OnRosterChanged()
     {
         RefreshDetails();
     }
@@ -295,9 +308,15 @@ public class RecruitmentPanelUI : MonoBehaviour
         {
             if (hasCandidate)
             {
-                txtReviewStatus.text = string.IsNullOrWhiteSpace(lastResultMessage)
+                string reviewMessage = string.IsNullOrWhiteSpace(lastResultMessage)
                     ? defaultReviewMessage
                     : $"{lastResultMessage}\n\n{defaultReviewMessage}";
+
+                if (!HasCapacityForLoyalRecruit())
+                    reviewMessage =
+                        $"{GetRosterFullMessage()}\n\n{reviewMessage}";
+
+                txtReviewStatus.text = reviewMessage;
             }
             else
             {
@@ -308,9 +327,10 @@ public class RecruitmentPanelUI : MonoBehaviour
         }
 
         bool canJudge = hasCandidate && (gameState == null || !gameState.IsRunEnded);
+        bool canAcceptLoyal = canJudge && HasCapacityForLoyalRecruit();
 
         if (btnMarkLoyal != null)
-            btnMarkLoyal.interactable = canJudge;
+            btnMarkLoyal.interactable = canAcceptLoyal;
 
         if (btnMarkImplant != null)
             btnMarkImplant.interactable = canJudge;
@@ -483,6 +503,13 @@ public class RecruitmentPanelUI : MonoBehaviour
         if (selectedCandidate == null || recruitmentManager == null)
             return;
 
+        if (judgment == CandidateVettingOutcome.Loyal && !HasCapacityForLoyalRecruit())
+        {
+            lastResultMessage = GetRosterFullMessage();
+            RefreshDetails();
+            return;
+        }
+
         PendingRecruitCandidate candidate = selectedCandidate;
         RecruitmentResolutionOutcome outcome = recruitmentManager.JudgeCandidate(candidate, judgment);
 
@@ -496,12 +523,21 @@ public class RecruitmentPanelUI : MonoBehaviour
                 $"{candidate.CandidateName} was an implant and was safely rejected.",
             RecruitmentResolutionOutcome.ImplantAccepted =>
                 BuildImplantAcceptedMessage(candidate),
+            RecruitmentResolutionOutcome.RosterFull =>
+                GetRosterFullMessage(),
             _ =>
                 "Candidate review could not be completed."
         };
 
-        selectedCandidate = null;
-        RebuildList();
+        if (outcome == RecruitmentResolutionOutcome.RosterFull)
+        {
+            RefreshDetails();
+        }
+        else
+        {
+            selectedCandidate = null;
+            RebuildList();
+        }
     }
 
     private string BuildLoyalAcceptedMessage(PendingRecruitCandidate candidate)
@@ -574,6 +610,53 @@ public class RecruitmentPanelUI : MonoBehaviour
         int safeCount = Mathf.Max(1, missionCount);
         string missionLabel = safeCount == 1 ? "1 mission" : $"{safeCount} missions";
         return missionLabel;
+    }
+
+    private void ResolveAgentRoster()
+    {
+        if (agentRoster != null)
+            return;
+
+        if (recruitmentManager != null)
+            agentRoster = recruitmentManager.AgentRoster;
+
+        if (agentRoster == null)
+            agentRoster = FindFirstObjectByType<AgentRoster>();
+    }
+
+    private bool HasCapacityForLoyalRecruit()
+    {
+        ResolveAgentRoster();
+        return agentRoster == null || agentRoster.HasCapacityForRecruit;
+    }
+
+    private string GetRosterFullMessage()
+    {
+        ResolveAgentRoster();
+
+        if (agentRoster == null)
+            return "Roster capacity is unavailable, so accepting is blocked.";
+
+        return
+            $"Roster full ({agentRoster.ActiveAgentCount}/{agentRoster.AgentCapacity}). Build more agent capacity before accepting loyal recruits.";
+    }
+
+    private void SubscribeToRoster()
+    {
+        if (subscribedToRoster || agentRoster == null)
+            return;
+
+        agentRoster.OnRosterChanged += OnRosterChanged;
+        subscribedToRoster = true;
+    }
+
+    private void UnsubscribeFromRoster()
+    {
+        if (!subscribedToRoster || agentRoster == null)
+            return;
+
+        agentRoster.OnRosterChanged -= OnRosterChanged;
+        subscribedToRoster = false;
     }
 
     private void DestroySpawned<T>(List<T> items) where T : Component

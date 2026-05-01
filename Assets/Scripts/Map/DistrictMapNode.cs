@@ -7,7 +7,8 @@ public enum DistrictVisualState
     Hovered,
     Selected,
     Dimmed,
-    Locked
+    Locked,
+    Hidden
 }
 
 /// <summary>
@@ -23,6 +24,11 @@ public class DistrictMapNode : MonoBehaviour
     [Tooltip("Drag the matching DistrictData ScriptableObject here.")]
     [SerializeField] private DistrictData districtData;
 
+    [Header("Mask Focus")]
+    [Tooltip("RGB color used by this district in the district mask texture.")]
+    [ColorUsage(false, false)]
+    [SerializeField] private Color maskColor = Color.red;
+
     [Header("Colors")]
     [SerializeField] private Color normalColor   = new Color(1f, 1f, 1f, 0.3f);
     [SerializeField] private Color hoverColor    = new Color(1f, 0.9f, 0.4f, 0.6f);
@@ -33,6 +39,7 @@ public class DistrictMapNode : MonoBehaviour
     private SpriteRenderer sr;
 
     public DistrictData Data => districtData;
+    public Color MaskColor => new Color(maskColor.r, maskColor.g, maskColor.b, 1f);
 
     private void Awake()
     {
@@ -44,6 +51,7 @@ public class DistrictMapNode : MonoBehaviour
     {
         sr.color = state switch
         {
+            DistrictVisualState.Hidden   => Color.clear,
             DistrictVisualState.Hovered  => hoverColor,
             DistrictVisualState.Selected => selectedColor,
             DistrictVisualState.Dimmed   => dimmedColor,

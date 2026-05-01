@@ -8,10 +8,6 @@ using UnityEngine.InputSystem;
 public class BaseCameraController : MonoBehaviour
 {
     [Header("Input Actions")]
-    [SerializeField] private InputAction scrollAction = new InputAction(
-        "Scroll", InputActionType.Value, "<Mouse>/scroll/y"
-    );
-
     [SerializeField] private InputAction panButtonAction = new InputAction(
         "PanButton", InputActionType.Button, "<Mouse>/middleButton"
     );
@@ -125,7 +121,6 @@ public class BaseCameraController : MonoBehaviour
 
     private void OnEnable()
     {
-        scrollAction.Enable();
         panButtonAction.Enable();
         panDeltaAction.Enable();
         wantsExit = false;
@@ -133,7 +128,6 @@ public class BaseCameraController : MonoBehaviour
 
     private void OnDisable()
     {
-        scrollAction.Disable();
         panButtonAction.Disable();
         panDeltaAction.Disable();
     }
@@ -142,33 +136,9 @@ public class BaseCameraController : MonoBehaviour
     {
         if (config == null) return;
 
-        HandleZoom();
         HandlePan();
         ApplySpringBack();
         ApplyMovement();
-    }
-
-    private void HandleZoom()
-    {
-        if (ShouldBlockRawInput()) return;
-
-        float scroll = scrollAction.ReadValue<float>() / 120f;
-        if (Mathf.Approximately(scroll, 0f)) return;
-
-        wantsExit = false;
-
-        requestedDistance -= scroll * config.baseZoomStep;
-
-        if (requestedDistance < minDistance)
-            requestedDistance = minDistance;
-
-        if (requestedDistance > returnToMapDistance)
-        {
-            requestedDistance = returnToMapDistance;
-            wantsExit = true;
-        }
-
-        targetDistance = Mathf.Clamp(requestedDistance, minDistance, maxDistance);
     }
 
     private void HandlePan()
@@ -228,11 +198,15 @@ public class BaseCameraController : MonoBehaviour
         if (topDownTransitionCompleteDistance <= topDownTransitionStartDistance)
             return 1f;
 
-        return Mathf.InverseLerp(
+        float rawBlend = Mathf.InverseLerp(
             topDownTransitionStartDistance,
             topDownTransitionCompleteDistance,
             targetDistance
         );
+
+        return config != null && config.topToBaseBlendCurve != null
+            ? Mathf.Clamp01(config.topToBaseBlendCurve.Evaluate(rawBlend))
+            : rawBlend;
     }
 
     private Vector3 GetCurrentCenter()

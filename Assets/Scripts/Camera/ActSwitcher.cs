@@ -33,8 +33,12 @@ public class ActSwitcher : MonoBehaviour
     /// </summary>
     public void SwitchToAct2()
     {
-        // If currently in base view, kick back to map first.
-        if (viewManager.CurrentState == ViewManager.ViewState.Base)
+        // If currently in base/top view, kick back to map first.
+        if (viewManager != null && viewManager.CurrentState != ViewManager.ViewState.Map)
+        {
+            viewManager.SnapToMapView();
+        }
+        else if (cameraController != null)
         {
             cameraController.GoToMapView();
         }

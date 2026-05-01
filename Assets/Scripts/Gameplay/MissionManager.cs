@@ -5,13 +5,18 @@ using UnityEngine;
 public class MissionManager : MonoBehaviour
 {
     [SerializeField] private GameState gameState;
+    [SerializeField] private GameCalendar gameCalendar;
     [SerializeField] private AgentRoster agentRoster;
     [SerializeField] private DistrictManager districtManager;
 
+    private void Reset()
+    {
+        ResolveReferences();
+    }
+
     private void Awake()
     {
-        if (districtManager == null)
-            districtManager = FindFirstObjectByType<DistrictManager>();
+        ResolveReferences();
     }
 
     [Header("Base Progression (optional)")]
@@ -46,6 +51,7 @@ public class MissionManager : MonoBehaviour
     private void Update()
     {
         if (gameState.IsRunEnded) return;
+        if (gameCalendar != null && gameCalendar.IsPaused) return;
         TickActiveMissions();
     }
 
@@ -611,5 +617,14 @@ public class MissionManager : MonoBehaviour
         chance += GetTeamTraitSuccessChanceBonus(team);
         chance -= Mathf.Max(0f, implantPenalty);
         return Mathf.Clamp01(chance);
+    }
+
+    private void ResolveReferences()
+    {
+        if (gameCalendar == null)
+            gameCalendar = FindFirstObjectByType<GameCalendar>();
+
+        if (districtManager == null)
+            districtManager = FindFirstObjectByType<DistrictManager>();
     }
 }

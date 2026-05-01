@@ -13,7 +13,8 @@ public enum RecruitmentResolutionOutcome
     LoyalAccepted,
     LoyalRejected,
     ImplantRejected,
-    ImplantAccepted
+    ImplantAccepted,
+    RosterFull
 }
 
 public enum RecruitmentClaimSource

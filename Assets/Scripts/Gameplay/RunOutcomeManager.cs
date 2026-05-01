@@ -4,6 +4,7 @@ public class RunOutcomeManager : MonoBehaviour
 {
     [Header("References")]
     [SerializeField] private GameState gameState;
+    [SerializeField] private GameCalendar gameCalendar;
     [SerializeField] private CameraController cameraController;
     [SerializeField] private BaseCameraController baseCameraController;
     [SerializeField] private MissionPanelUI missionPanel;
@@ -36,9 +37,20 @@ public class RunOutcomeManager : MonoBehaviour
     private float chaosAboveThresholdTimer;
     private bool ended;
 
+    private void Reset()
+    {
+        ResolveReferences();
+    }
+
+    private void Awake()
+    {
+        ResolveReferences();
+    }
+
     private void Update()
     {
         if (ended || gameState.IsRunEnded) return;
+        if (gameCalendar != null && gameCalendar.IsPaused) return;
 
         RunOutcome outcome = CheckOutcomes();
         if (outcome != RunOutcome.None)
@@ -90,5 +102,11 @@ public class RunOutcomeManager : MonoBehaviour
         };
 
         endingPanel.Show(outcome, narrative, gameState);
+    }
+
+    private void ResolveReferences()
+    {
+        if (gameCalendar == null)
+            gameCalendar = FindFirstObjectByType<GameCalendar>();
     }
 }

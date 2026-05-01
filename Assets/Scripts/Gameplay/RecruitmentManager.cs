@@ -31,6 +31,9 @@ public class RecruitmentManager : MonoBehaviour
     public IReadOnlyList<PendingRecruitCandidate> PendingCandidates => pendingCandidates;
     public int PendingCount => pendingCandidates.Count;
     public bool HasPendingCandidates => pendingCandidates.Count > 0;
+    public AgentRoster AgentRoster => agentRoster;
+    public bool HasCapacityForLoyalRecruit =>
+        agentRoster == null || agentRoster.HasCapacityForRecruit;
     public int RookieMissionStatPenalty => Mathf.Max(0, rookieMissionStatPenalty);
     public int RookieMissionsToGraduate => Mathf.Max(1, rookieMissionsToGraduate);
     public int RemainingImplantPenaltyMissions => remainingImplantPenaltyMissions;
@@ -160,10 +163,17 @@ public class RecruitmentManager : MonoBehaviour
         if (candidate == null)
             return RecruitmentResolutionOutcome.None;
 
+        RecruitmentResolutionOutcome outcome = candidate.GetResolutionOutcome(judgment);
+        if (outcome == RecruitmentResolutionOutcome.LoyalAccepted &&
+            agentRoster != null &&
+            !agentRoster.HasCapacityForRecruit)
+        {
+            OnCandidateResolved?.Invoke(candidate, RecruitmentResolutionOutcome.RosterFull);
+            return RecruitmentResolutionOutcome.RosterFull;
+        }
+
         if (!pendingCandidates.Remove(candidate))
             return RecruitmentResolutionOutcome.None;
-
-        RecruitmentResolutionOutcome outcome = candidate.GetResolutionOutcome(judgment);
 
         switch (outcome)
         {

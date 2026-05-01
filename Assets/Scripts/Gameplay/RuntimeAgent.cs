@@ -7,9 +7,21 @@ public enum AgentStatus
     Lost
 }
 
+public enum AgentRank
+{
+    Rookie,
+    Operative,
+    Veteran,
+    Elite
+}
+
 [System.Serializable]
 public class RuntimeAgent
 {
+    public const int OperativeMissionThreshold = 1;
+    public const int VeteranMissionThreshold = 4;
+    public const int EliteMissionThreshold = 8;
+
     public RecruitmentCandidateDefinition Definition;
     public string Name;
     public int INT;
@@ -24,6 +36,10 @@ public class RuntimeAgent
     public int RookieMissionsRequired { get; private set; }
 
     public bool IsRookie => RookieMissionsRequired > 0 && CompletedMissionCount < RookieMissionsRequired;
+
+    public AgentRank Rank => GetRankForCompletedMissions(CompletedMissionCount);
+
+    public string RankDisplayName => Rank.ToString();
 
     public string TraitGameplaySummary =>
         RecruitmentTraitGameplayUtility.GetEffectSummary(
@@ -116,6 +132,22 @@ public class RuntimeAgent
     public void RecordMissionCompleted()
     {
         CompletedMissionCount++;
+    }
+
+    public static AgentRank GetRankForCompletedMissions(int completedMissionCount)
+    {
+        int safeCount = Mathf.Max(0, completedMissionCount);
+
+        if (safeCount >= EliteMissionThreshold)
+            return AgentRank.Elite;
+
+        if (safeCount >= VeteranMissionThreshold)
+            return AgentRank.Veteran;
+
+        if (safeCount >= OperativeMissionThreshold)
+            return AgentRank.Operative;
+
+        return AgentRank.Rookie;
     }
 
     public string GetMissionModifierSummary(int rookieStatPenalty)

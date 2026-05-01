@@ -37,6 +37,7 @@ public class GameState : MonoBehaviour
     public float ChaosNormalized => maxChaos > 0f ? Chaos / maxChaos : 0f;
 
     public bool IsRunEnded { get; private set; }
+    public bool IsDistrictDriven => districtDriven;
 
     // ── Events ────────────────────────────────────────────────────────
     public event Action OnStateChanged;

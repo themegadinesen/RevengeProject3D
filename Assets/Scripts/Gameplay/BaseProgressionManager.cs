@@ -7,6 +7,7 @@ public class BaseProgressionManager : MonoBehaviour
 {
     [Header("References")]
     [SerializeField] private GameState gameState;
+    [SerializeField] private GameCalendar gameCalendar;
 
     [Header("Buildings")]
     [Tooltip("All buildings in the game, in display order.")]
@@ -35,6 +36,16 @@ public class BaseProgressionManager : MonoBehaviour
     public bool IsProgressionActive => progressionActive;
 
     // ── Lifecycle ─────────────────────────────────────────────────────
+    private void Reset()
+    {
+        ResolveReferences();
+    }
+
+    private void Awake()
+    {
+        ResolveReferences();
+    }
+
     private void Start()
     {
         InitBuildings();
@@ -44,6 +55,7 @@ public class BaseProgressionManager : MonoBehaviour
     {
         if (!progressionActive) return;
         if (gameState.IsRunEnded) return;
+        if (gameCalendar != null && gameCalendar.IsPaused) return;
 
         UpdatePrerequisites();
         TickConstruction();
@@ -247,5 +259,11 @@ public class BaseProgressionManager : MonoBehaviour
     {
         progressionActive = true;
         UpdatePrerequisites();
+    }
+
+    private void ResolveReferences()
+    {
+        if (gameCalendar == null)
+            gameCalendar = FindFirstObjectByType<GameCalendar>();
     }
 }

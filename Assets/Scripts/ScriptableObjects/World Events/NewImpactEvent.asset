@@ -1,0 +1,42 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 485881df69b45c742a727b8829d2f501, type: 3}
+  m_Name: NewImpactEvent
+  m_EditorClassIdentifier: Assembly-CSharp::ImpactEventDefinition
+  cooldownSeconds: 180
+  targetMode: 0
+  conditions:
+    actRequirement: 0
+    minimumChaos: 0
+    minimumCure: 0
+    minimumLostAgents: 0
+    minimumDistrictHeat: 0
+    minimumDistrictChaos: 0
+    minimumDistrictCure: 0
+    requiresActiveMission: 0
+    requiresAvailableAgent: 0
+  eventTitle: World Event
+  description: Something is happening near {district}.
+  choices:
+  - label: death
+    description: deaht
+    consequencePreview: die alone
+    consequences:
+      moneyDelta: 0
+      globalChaosDelta: 0
+      globalCureDelta: 0
+      districtChaosDelta: 0
+      districtCureDelta: 0
+      districtHeatDelta: 0
+      loseFirstAvailableAgent: 0
+      candidateArrivalMission: {fileID: 0}
+      requireMoneyForNegativeDelta: 0

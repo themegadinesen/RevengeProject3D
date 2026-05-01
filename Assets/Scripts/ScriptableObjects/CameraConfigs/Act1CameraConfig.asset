@@ -31,10 +31,72 @@ MonoBehaviour:
   basePanSpeed: 5
   basePanSpringBackSpeed: 4
   baseMoveLerpSpeed: 4.69
+  normalizedScrollSpeed: 0.038
+  buttonTravelDuration: 0.136
   defaultBaseFieldOfView: 60.3
   defaultTopDownBaseFieldOfView: 90
   defaultBaseDistance: 60
   defaultTopDownHeightBoost: 6
+  mapToTopCloudTravelRange: 18
+  mapToTopHandoffDuration: 0.642
+  mapToTopBlendCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.5
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: -4
+      outSlope: -4
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  topToBaseBlendCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  transitionPulseStrength: 1
   peakBlurStrength: 0.4
   transitionDuration: 0.3
   swapPoint: 0.5

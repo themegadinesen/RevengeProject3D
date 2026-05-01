@@ -26,11 +26,22 @@ public class DistrictHoverUI : MonoBehaviour
     [Tooltip("Offset in Canvas-scaled pixels from the mouse cursor.")]
     [SerializeField] private Vector2 offset = new Vector2(20f, -20f);
 
+    [Header("Edge Reposition")]
+    [Tooltip("Seconds used when the tooltip flips to the other side of the cursor near a screen edge.")]
+    [Min(0f)]
+    [SerializeField] private float edgeRepositionSmoothTime = 0.08f;
+
     private CanvasGroup canvasGroup;
     private RectTransform rectTransform;
     private RectTransform canvasRect;
     private RuntimeDistrict currentDistrict;
     private float targetAlpha;
+    private Vector2 positionVelocity;
+    private bool hasPosition;
+    private bool isRepositioning;
+    private bool hasPlacement;
+    private bool placedLeftOfCursor;
+    private bool placedAboveCursor;
     private bool initialized;
 
     private void Awake()
@@ -82,13 +93,17 @@ public class DistrictHoverUI : MonoBehaviour
         if (targetAlpha <= 0f && canvasGroup.alpha <= 0.001f)
         {
             currentDistrict = null;
+            hasPosition = false;
+            hasPlacement = false;
+            isRepositioning = false;
             gameObject.SetActive(false);
         }
     }
 
     public void Show(RuntimeDistrict district, Vector2 screenPos)
     {
-        if (!gameObject.activeSelf)
+        bool wasInactive = !gameObject.activeSelf;
+        if (wasInactive)
             gameObject.SetActive(true);
 
         Initialize();
@@ -97,7 +112,7 @@ public class DistrictHoverUI : MonoBehaviour
         targetAlpha = 1f;
 
         RefreshStats();
-        FollowMouse();
+        FollowMouse(wasInactive);
     }
 
     public void Hide()
@@ -182,7 +197,7 @@ public class DistrictHoverUI : MonoBehaviour
         }
     }
 
-    private void FollowMouse()
+    private void FollowMouse(bool forceInstant = false)
     {
         if (Mouse.current == null || canvasRect == null)
             return;
@@ -195,22 +210,76 @@ public class DistrictHoverUI : MonoBehaviour
         Vector2 tooltipSize = rectTransform.rect.size;
         Vector2 canvasSize = canvasRect.rect.size;
 
-        Vector2 pos = localPoint + offset;
+        bool nextPlacedLeft = false;
+        bool nextPlacedAbove = false;
+        Vector2 targetPos = localPoint + offset;
 
         float minX = -canvasSize.x * 0.5f;
         float maxX = canvasSize.x * 0.5f - tooltipSize.x;
         float minY = -canvasSize.y * 0.5f + tooltipSize.y;
         float maxY = canvasSize.y * 0.5f;
 
-        if (pos.x + tooltipSize.x > canvasSize.x * 0.5f)
-            pos.x = localPoint.x - offset.x - tooltipSize.x;
+        if (targetPos.x + tooltipSize.x > canvasSize.x * 0.5f)
+        {
+            targetPos.x = localPoint.x - offset.x - tooltipSize.x;
+            nextPlacedLeft = true;
+        }
 
-        if (pos.y - tooltipSize.y < -canvasSize.y * 0.5f)
-            pos.y = localPoint.y - offset.y + tooltipSize.y;
+        if (targetPos.y - tooltipSize.y < -canvasSize.y * 0.5f)
+        {
+            targetPos.y = localPoint.y - offset.y + tooltipSize.y;
+            nextPlacedAbove = true;
+        }
 
-        pos.x = Mathf.Clamp(pos.x, minX, maxX);
-        pos.y = Mathf.Clamp(pos.y, minY, maxY);
+        targetPos.x = Mathf.Clamp(targetPos.x, minX, maxX);
+        targetPos.y = Mathf.Clamp(targetPos.y, minY, maxY);
 
-        rectTransform.localPosition = pos;
+        bool placementChanged = hasPlacement &&
+                                (placedLeftOfCursor != nextPlacedLeft ||
+                                 placedAboveCursor != nextPlacedAbove);
+
+        placedLeftOfCursor = nextPlacedLeft;
+        placedAboveCursor = nextPlacedAbove;
+        hasPlacement = true;
+
+        if (forceInstant || !hasPosition || edgeRepositionSmoothTime <= 0f)
+        {
+            rectTransform.localPosition = targetPos;
+            positionVelocity = Vector2.zero;
+            isRepositioning = false;
+            hasPosition = true;
+            return;
+        }
+
+        if (placementChanged)
+        {
+            isRepositioning = true;
+            positionVelocity = Vector2.zero;
+        }
+
+        if (!isRepositioning)
+        {
+            rectTransform.localPosition = targetPos;
+            return;
+        }
+
+        Vector2 currentPos = rectTransform.localPosition;
+        Vector2 smoothedPos = Vector2.SmoothDamp(
+            currentPos,
+            targetPos,
+            ref positionVelocity,
+            edgeRepositionSmoothTime,
+            Mathf.Infinity,
+            Time.unscaledDeltaTime);
+
+        rectTransform.localPosition = smoothedPos;
+
+        if ((smoothedPos - targetPos).sqrMagnitude <= 1f &&
+            positionVelocity.sqrMagnitude <= 1f)
+        {
+            rectTransform.localPosition = targetPos;
+            isRepositioning = false;
+            positionVelocity = Vector2.zero;
+        }
     }
 }

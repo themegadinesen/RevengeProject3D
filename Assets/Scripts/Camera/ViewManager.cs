@@ -48,6 +48,7 @@ public class ViewManager : MonoBehaviour
     private const float HandoffBoundarySlack = 0.01f;
     private const float CloudApproachMapRangeFraction = 0.35f;
     private const float CloudApproachMaxProgress = 0.22f;
+    private const float CloudBaseRevealRangeFraction = 0.55f;
     private static readonly int TransitionStrengthID = Shader.PropertyToID("_ZoomBlurStrength");
     private static readonly int TransitionProgressID = Shader.PropertyToID("_TransitionProgress");
     private static readonly int TransitionDirectionID = Shader.PropertyToID("_TransitionDirection");
@@ -382,9 +383,30 @@ public class ViewManager : MonoBehaviour
             ? Mathf.Lerp(0.82f, 1f, t)
             : Mathf.Lerp(1f, 0.82f, t);
         float holdUntilSwap = Mathf.Clamp01(config.swapPoint);
-        float strength = handoffToBase
-            ? Mathf.Lerp(config.transitionPulseStrength, 0f, SmoothRange(holdUntilSwap, 1f, t))
-            : Mathf.Lerp(0f, config.transitionPulseStrength, SmoothRange(0f, holdUntilSwap, t));
+        float strength;
+        if (handoffToBase)
+        {
+            float timedStrength = Mathf.Lerp(
+                config.transitionPulseStrength,
+                0f,
+                SmoothRange(holdUntilSwap, 1f, t)
+            );
+            float zoomRevealStrength = 0f;
+            if (handoffSwapped)
+            {
+                zoomRevealStrength = Mathf.SmoothStep(
+                    0f,
+                    1f,
+                    GetBaseCloudRevealProgress(domain, zoomCurrentNormalized)
+                ) * config.transitionPulseStrength;
+            }
+
+            strength = Mathf.Max(timedStrength, zoomRevealStrength);
+        }
+        else
+        {
+            strength = config.transitionPulseStrength;
+        }
         SetTransitionEffect(progress, strength, direction);
 
         if (!handoffSwapped && t >= config.swapPoint)
@@ -415,10 +437,15 @@ public class ViewManager : MonoBehaviour
     {
         handoffActive = false;
         handoffSwapped = false;
-        SetTransitionEffect(0f, 0f, handoffToBase ? 1f : -1f);
 
         bool runEnded = gameState != null && gameState.IsRunEnded;
         LockControllers(runEnded);
+        CameraZoomConfig config = ActiveConfig;
+        if (config != null)
+            UpdateCloudBandEffect(domain, config);
+        else
+            SetTransitionEffect(0f, 0f, handoffToBase ? 1f : -1f);
+
         UpdateStateFromCurrent(domain);
     }
 
@@ -649,6 +676,43 @@ public class ViewManager : MonoBehaviour
         );
     }
 
+    private static bool IsInBaseCloudReveal(ZoomDomain domain, float normalized)
+    {
+        if (!domain.HasBase || domain.BaseRange <= 0.0001f || !domain.IsValid)
+            return false;
+
+        float revealRange = GetBaseCloudRevealRange(domain);
+        if (revealRange <= 0.0001f)
+            return false;
+
+        float units = Mathf.Clamp01(normalized) * domain.TotalRange;
+        return units <= domain.BaseRange + BoundaryEpsilon &&
+               units >= domain.BaseRange - revealRange - BoundaryEpsilon;
+    }
+
+    private static float GetBaseCloudRevealProgress(ZoomDomain domain, float normalized)
+    {
+        if (!IsInBaseCloudReveal(domain, normalized))
+            return 0f;
+
+        float revealRange = GetBaseCloudRevealRange(domain);
+        float units = Mathf.Clamp01(normalized) * domain.TotalRange;
+        return Mathf.Clamp01(Mathf.InverseLerp(domain.BaseRange - revealRange, domain.BaseRange, units));
+    }
+
+    private static float GetBaseCloudRevealRange(ZoomDomain domain)
+    {
+        float topViewUnits = Mathf.Clamp(
+            domain.TopViewDistance - domain.BaseMinDistance,
+            0f,
+            domain.BaseRange
+        );
+        float topViewRange = domain.BaseRange - topViewUnits;
+        float fallbackRange = domain.CloudRange * CloudBaseRevealRangeFraction;
+        float revealRange = topViewRange > 0.0001f ? topViewRange : fallbackRange;
+        return Mathf.Clamp(revealRange, 0f, domain.BaseRange);
+    }
+
     private static float GetBaseDistanceForNormalized(ZoomDomain domain, float normalized)
     {
         float units = Mathf.Clamp01(normalized) * domain.TotalRange;
@@ -731,6 +795,19 @@ public class ViewManager : MonoBehaviour
                 * config.transitionPulseStrength;
             float direction = zoomTargetNormalized <= zoomCurrentNormalized ? 1f : -1f;
             SetTransitionEffect(progress, strength, direction);
+            return;
+        }
+
+        if (activeMode == CameraMode.Base && IsInBaseCloudReveal(domain, zoomCurrentNormalized))
+        {
+            float revealProgress = Mathf.SmoothStep(
+                0f,
+                1f,
+                GetBaseCloudRevealProgress(domain, zoomCurrentNormalized)
+            );
+            float progress = Mathf.Lerp(0.72f, 1f, revealProgress);
+            float strength = revealProgress * config.transitionPulseStrength;
+            SetTransitionEffect(progress, strength, 1f);
             return;
         }
 

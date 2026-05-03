@@ -130,6 +130,9 @@ Shader "Custom/CloudDiveVolume"
                 float entryFade = smoothstep(0.02, 0.28, progress);
                 float exitFade = 1.0 - smoothstep(0.88, 1.0, progress);
                 float peak = sin(progress * CloudPi);
+                float coverAmount = smoothstep(0.02, 0.96, progress);
+                float densityBoost = max(peak, coverAmount * 0.85);
+                float revealOpening = 1.0 - smoothstep(0.18, 0.78, strength);
                 float direction = _TransitionDirection >= 0.0 ? 1.0 : -1.0;
                 float3 diveOffset = float3(
                     _Time.y * 0.026,
@@ -160,9 +163,9 @@ Shader "Custom/CloudDiveVolume"
                     float centerBody = 1.0 - smoothstep(0.38, 1.02, radial);
                     float edgeRush = smoothstep(0.2, 0.88, radial) * (1.0 - smoothstep(0.92, 1.22, radial));
                     float depthBand = smoothstep(0.04, 0.34, stepT) * (1.0 - smoothstep(0.78, 1.0, stepT));
-                    float exitOpening = smoothstep(0.72, 1.0, progress) * (1.0 - smoothstep(0.0, 0.42, radial));
-                    float diveEnvelope = saturate(centerBody * (0.82 - exitOpening * 0.48) + edgeRush * (0.25 + peak * 0.58));
-                    density *= diveEnvelope * depthBand * _CloudDensity * strength * (0.55 + entryFade * 0.42 + peak * 1.05 + exitFade * 0.18);
+                    float exitOpening = smoothstep(0.72, 1.0, progress) * revealOpening * (1.0 - smoothstep(0.0, 0.42, radial));
+                    float diveEnvelope = saturate(centerBody * (0.88 - exitOpening * 0.52) + edgeRush * (0.25 + densityBoost * 0.58));
+                    density *= diveEnvelope * depthBand * _CloudDensity * strength * (0.55 + entryFade * 0.42 + densityBoost * 1.05 + exitFade * 0.18);
 
                     float sampleAlpha = saturate(density * stepSize * 2.25);
                     alpha += (1.0 - alpha) * sampleAlpha;
@@ -174,10 +177,10 @@ Shader "Custom/CloudDiveVolume"
                 float light = saturate(litDensity / max(alpha, 0.001));
                 float silverLining = saturate(depthGlow / max(alpha, 0.001));
                 half3 cloudColor = lerp(_CloudLowlight.rgb, _CloudHighlight.rgb, light);
-                cloudColor = lerp(cloudColor, _CloudHighlight.rgb, silverLining * (0.08 + peak * 0.26));
+                cloudColor = lerp(cloudColor, _CloudHighlight.rgb, silverLining * (0.08 + densityBoost * 0.26));
                 alpha *= saturate(0.4 + entryFade * 0.72);
-                alpha *= saturate(0.68 + exitFade * 0.32);
-                return half4(cloudColor, alpha * 0.92);
+                alpha *= lerp(1.0, saturate(0.68 + exitFade * 0.32), revealOpening);
+                return half4(cloudColor, alpha * 0.96);
             }
             ENDHLSL
         }

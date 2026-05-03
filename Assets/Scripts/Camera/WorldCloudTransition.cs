@@ -54,6 +54,11 @@ public class WorldCloudTransition : MonoBehaviour
     [SerializeField, Min(0f)] private float birdViewportScatter = 0.12f;
     [SerializeField, Min(0.01f)] private float birdScaleMultiplier = 1f;
     [SerializeField] private Vector3 birdRotationOffsetEuler = Vector3.zero;
+    [SerializeField] private bool birdUseWorldSpace = true;
+    [SerializeField] private bool birdAllowLeftToRight = true;
+    [SerializeField, Range(0f, 1f)] private float birdLeftToRightChance = 0.5f;
+    [SerializeField] private bool spawnPeriodicBirdsInBaseView = true;
+    [SerializeField] private Vector2 periodicBirdInterval = new Vector2(18f, 35f);
     [SerializeField] private bool playFlybysWhenReturningToMap;
 
     [Header("Debug")]
@@ -88,12 +93,14 @@ public class WorldCloudTransition : MonoBehaviour
     private bool planePlayed;
     private bool birdsPlayed;
     private bool baseViewReadyForBirds;
+    private float nextPeriodicBirdSpawnTime = float.PositiveInfinity;
 
     private class ActiveFlyby
     {
         public Transform Transform;
-        public Vector3 StartLocalPosition;
-        public Vector3 EndLocalPosition;
+        public Vector3 StartPosition;
+        public Vector3 EndPosition;
+        public bool UseLocalSpace;
         public float Duration;
         public float Elapsed;
     }
@@ -122,7 +129,15 @@ public class WorldCloudTransition : MonoBehaviour
 
     public void SetBaseViewReadyForBirds(bool ready)
     {
+        if (baseViewReadyForBirds == ready)
+            return;
+
         baseViewReadyForBirds = ready;
+
+        if (baseViewReadyForBirds)
+            ScheduleNextPeriodicBirdSpawn();
+        else
+            nextPeriodicBirdSpawnTime = float.PositiveInfinity;
     }
 
     public void SetTransition(float progress, float strength, float direction)
@@ -173,6 +188,7 @@ public class WorldCloudTransition : MonoBehaviour
         RefreshRuntimeObjectLayers();
         RefreshMapCloudTransform();
         UpdateActiveFlybys();
+        UpdatePeriodicBirdFlocks();
     }
 
     private void EnsureResources()
@@ -362,7 +378,8 @@ public class WorldCloudTransition : MonoBehaviour
                 planeDuration,
                 planeScaleMultiplier,
                 planeRotationOffsetEuler,
-                0f
+                0f,
+                useWorldSpace: false
             );
         }
 
@@ -379,6 +396,7 @@ public class WorldCloudTransition : MonoBehaviour
         if (birdFlockPrefabs == null || birdFlockPrefabs.Length == 0)
             return;
 
+        bool leftToRight = birdAllowLeftToRight && Random.value < birdLeftToRightChance;
         int count = Mathf.Max(1, birdFlockCount);
         for (int i = 0; i < count; i++)
         {
@@ -388,8 +406,10 @@ public class WorldCloudTransition : MonoBehaviour
 
             Vector2 scatter = Random.insideUnitCircle * birdViewportScatter;
             float stagger = count > 1 ? i / (float)(count - 1) : 0.5f;
-            Vector2 start = birdStartViewport + scatter + Vector2.up * Mathf.Lerp(-0.08f, 0.08f, stagger);
-            Vector2 end = birdEndViewport + scatter + Vector2.up * Mathf.Lerp(0.08f, -0.08f, stagger);
+            Vector2 configuredStart = birdStartViewport + scatter + Vector2.up * Mathf.Lerp(-0.08f, 0.08f, stagger);
+            Vector2 configuredEnd = birdEndViewport + scatter + Vector2.up * Mathf.Lerp(0.08f, -0.08f, stagger);
+            Vector2 start = leftToRight ? configuredEnd : configuredStart;
+            Vector2 end = leftToRight ? configuredStart : configuredEnd;
 
             SpawnFlyby(
                 prefab,
@@ -399,9 +419,32 @@ public class WorldCloudTransition : MonoBehaviour
                 birdDuration,
                 birdScaleMultiplier,
                 birdRotationOffsetEuler,
-                birdHeightOffset
+                birdHeightOffset,
+                birdUseWorldSpace
             );
         }
+    }
+
+    private void UpdatePeriodicBirdFlocks()
+    {
+        if (!spawnPeriodicBirdsInBaseView || !baseViewReadyForBirds || transitionActive)
+            return;
+
+        if (birdFlockPrefabs == null || birdFlockPrefabs.Length == 0)
+            return;
+
+        if (Time.time < nextPeriodicBirdSpawnTime)
+            return;
+
+        SpawnBirdFlocks();
+        ScheduleNextPeriodicBirdSpawn();
+    }
+
+    private void ScheduleNextPeriodicBirdSpawn()
+    {
+        float minInterval = Mathf.Max(0.1f, Mathf.Min(periodicBirdInterval.x, periodicBirdInterval.y));
+        float maxInterval = Mathf.Max(minInterval, Mathf.Max(periodicBirdInterval.x, periodicBirdInterval.y));
+        nextPeriodicBirdSpawnTime = Time.time + Random.Range(minInterval, maxInterval);
     }
 
     private void SpawnFlyby(
@@ -412,7 +455,8 @@ public class WorldCloudTransition : MonoBehaviour
         float duration,
         float scaleMultiplier,
         Vector3 rotationOffsetEuler,
-        float heightOffset)
+        float heightOffset,
+        bool useWorldSpace)
     {
         if (prefab == null || targetCamera == null)
             return;
@@ -429,26 +473,42 @@ public class WorldCloudTransition : MonoBehaviour
         }
 
         instance.name = prefab.name + " Runtime Flyby";
-        instance.transform.SetParent(targetCamera.transform, false);
+        if (!useWorldSpace)
+            instance.transform.SetParent(targetCamera.transform, false);
 
-        Vector3 start = ViewportToCameraLocal(startViewport, distance);
-        Vector3 end = ViewportToCameraLocal(endViewport, distance);
-        Vector3 localHeightOffset = Vector3.up * heightOffset;
-        start += localHeightOffset;
-        end += localHeightOffset;
+        Vector3 start = useWorldSpace
+            ? ViewportToWorld(startViewport, distance)
+            : ViewportToCameraLocal(startViewport, distance);
+        Vector3 end = useWorldSpace
+            ? ViewportToWorld(endViewport, distance)
+            : ViewportToCameraLocal(endViewport, distance);
+        Vector3 offset = Vector3.up * heightOffset;
+        start += offset;
+        end += offset;
         Vector3 direction = end - start;
 
-        instance.transform.localPosition = start;
-        instance.transform.localRotation = direction.sqrMagnitude > 0.0001f
+        if (useWorldSpace)
+            instance.transform.position = start;
+        else
+            instance.transform.localPosition = start;
+
+        Quaternion rotation = direction.sqrMagnitude > 0.0001f
             ? Quaternion.LookRotation(direction.normalized, Vector3.up) * Quaternion.Euler(rotationOffsetEuler)
             : Quaternion.Euler(rotationOffsetEuler);
+
+        if (useWorldSpace)
+            instance.transform.rotation = rotation;
+        else
+            instance.transform.localRotation = rotation;
+
         instance.transform.localScale = prefab.transform.localScale * Mathf.Max(0.01f, scaleMultiplier);
 
         activeFlybys.Add(new ActiveFlyby
         {
             Transform = instance.transform,
-            StartLocalPosition = start,
-            EndLocalPosition = end,
+            StartPosition = start,
+            EndPosition = end,
+            UseLocalSpace = !useWorldSpace,
             Duration = Mathf.Max(0.05f, duration),
             Elapsed = 0f
         });
@@ -514,6 +574,18 @@ public class WorldCloudTransition : MonoBehaviour
         );
     }
 
+    private Vector3 ViewportToWorld(Vector2 viewportPosition, float distance)
+    {
+        if (targetCamera == null)
+            return Vector3.forward * Mathf.Max(0.1f, distance);
+
+        return targetCamera.ViewportToWorldPoint(new Vector3(
+            viewportPosition.x,
+            viewportPosition.y,
+            Mathf.Max(0.1f, distance)
+        ));
+    }
+
     private void UpdateActiveFlybys()
     {
         for (int i = activeFlybys.Count - 1; i >= 0; i--)
@@ -528,11 +600,16 @@ public class WorldCloudTransition : MonoBehaviour
             flyby.Elapsed += Time.deltaTime;
             float t = Mathf.Clamp01(flyby.Elapsed / flyby.Duration);
             float eased = Mathf.SmoothStep(0f, 1f, t);
-            flyby.Transform.localPosition = Vector3.LerpUnclamped(
-                flyby.StartLocalPosition,
-                flyby.EndLocalPosition,
+            Vector3 position = Vector3.LerpUnclamped(
+                flyby.StartPosition,
+                flyby.EndPosition,
                 eased
             );
+
+            if (flyby.UseLocalSpace)
+                flyby.Transform.localPosition = position;
+            else
+                flyby.Transform.position = position;
 
             if (t >= 1f)
             {
@@ -561,6 +638,8 @@ public class WorldCloudTransition : MonoBehaviour
         planeDuration = Mathf.Max(0.05f, planeDuration);
         birdFlockCount = Mathf.Max(1, birdFlockCount);
         birdDuration = Mathf.Max(0.05f, birdDuration);
+        periodicBirdInterval.x = Mathf.Max(0.1f, periodicBirdInterval.x);
+        periodicBirdInterval.y = Mathf.Max(0.1f, periodicBirdInterval.y);
         RefreshRuntimeObjectHideFlags();
         ApplyStaticSettings();
     }
@@ -577,6 +656,7 @@ public class WorldCloudTransition : MonoBehaviour
         planePlayed = false;
         birdsPlayed = false;
         baseViewReadyForBirds = false;
+        nextPeriodicBirdSpawnTime = float.PositiveInfinity;
     }
 
     private void OnDestroy()

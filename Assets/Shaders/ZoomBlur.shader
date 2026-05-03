@@ -90,11 +90,13 @@ Shader "Custom/TransitionSoftBlur"
                 // Cheap passthrough while the fullscreen renderer feature is idle.
                 float strength = saturate(_ZoomBlurStrength);
                 float progress = saturate(_TransitionProgress);
-                if (strength < 0.001 || progress <= 0.001 || progress >= 0.999)
+                if (strength < 0.001 || progress <= 0.001)
                     return sceneColor;
 
                 float transitionPeak = sin(progress * CloudPi);
-                float blurRadius = lerp(1.0, 8.0, transitionPeak) * strength;
+                float coverAmount = smoothstep(0.02, 0.96, progress);
+                float veil = saturate(coverAmount * strength);
+                float blurRadius = lerp(1.0, 10.0, saturate(max(transitionPeak, coverAmount * 0.72))) * strength;
                 float2 texel = blurRadius / max(_ScreenParams.xy, float2(1.0, 1.0));
 
                 half3 blurredScene = sceneColor.rgb * 0.24;
@@ -107,9 +109,23 @@ Shader "Custom/TransitionSoftBlur"
                 blurredScene += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + texel * float2( 1.0, -1.0)).rgb * 0.07;
                 blurredScene += SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + texel * float2(-1.0, -1.0)).rgb * 0.07;
 
-                half3 hazeColor = lerp(_CloudShadowTint.rgb, _CloudTint.rgb, 0.72);
-                float hazeOpacity = transitionPeak * strength * 0.18;
-                half3 softenedScene = lerp(sceneColor.rgb, blurredScene, saturate(transitionPeak * strength));
+                float aspect = _ScreenParams.x / max(_ScreenParams.y, 1.0);
+                float direction = _TransitionDirection >= 0.0 ? 1.0 : -1.0;
+                float2 cloudUv = (uv - 0.5) * float2(aspect, 1.0) * _CloudScale;
+                float2 drift = _Time.y * float2(0.038, 0.017) * direction;
+                float2 warp = float2(
+                    Fbm(cloudUv * 0.48 + drift + 11.4),
+                    Fbm(cloudUv * 0.48 - drift + 43.9)
+                ) - 0.5;
+                float cloudNoise = Fbm(cloudUv + warp * (_CloudWarp * 8.0) + drift * 2.0);
+                float cloudDetail = Fbm(cloudUv * 2.1 - drift + 6.7);
+                float cloudBody = saturate(cloudNoise * 0.72 + cloudDetail * 0.28);
+                float cloudMask = smoothstep(0.5 - _CloudSoftness, 0.5 + _CloudSoftness, cloudBody);
+                cloudMask = lerp(cloudMask, 1.0, smoothstep(0.72, 1.0, coverAmount) * 0.94);
+
+                half3 hazeColor = lerp(_CloudShadowTint.rgb, _CloudTint.rgb, saturate(cloudBody * 0.75 + 0.2));
+                float hazeOpacity = saturate(veil * lerp(0.16, 1.0, coverAmount) * lerp(0.78, 1.08, cloudMask));
+                half3 softenedScene = lerp(sceneColor.rgb, blurredScene, saturate((transitionPeak * 0.45 + coverAmount * 0.72) * strength));
 
                 return half4(lerp(softenedScene, hazeColor, hazeOpacity), sceneColor.a);
             }

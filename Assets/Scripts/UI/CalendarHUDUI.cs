@@ -1,6 +1,7 @@
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using EvoButton = Evo.UI.Button;
 
 public class CalendarHUDUI : MonoBehaviour
 {
@@ -13,7 +14,7 @@ public class CalendarHUDUI : MonoBehaviour
     [Header("References")]
     [SerializeField] private GameCalendar calendar;
     [SerializeField] private TextMeshProUGUI txtCalendar;
-    [SerializeField] private Button btnPause;
+    [SerializeField] private EvoButton btnPause;
     [SerializeField] private TextMeshProUGUI txtPauseLabel;
     [SerializeField] private TextMeshProUGUI txtPauseText;
 

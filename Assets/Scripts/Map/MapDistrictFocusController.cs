@@ -52,6 +52,9 @@ public class MapDistrictFocusController : MonoBehaviour
     private float targetFocusStrength;
 
     public bool HasFocusedDistrict => focusedNode != null;
+    public float CurrentFocusStrength => Mathf.SmoothStep(0f, 1f, focusStrength);
+    public float OutsideBrightness => outsideBrightness;
+    public float OutsideSaturation => outsideSaturation;
 
     private void Reset()
     {

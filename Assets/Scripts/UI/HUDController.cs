@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using EvoProgressBar = Evo.UI.ProgressBar;
 
 public class HUDController : MonoBehaviour
 {
@@ -20,7 +21,7 @@ public class HUDController : MonoBehaviour
     [SerializeField] private TextMeshProUGUI txtActiveMissions;
 
     [Header("Cure Bar")]
-    [SerializeField] private Slider cureBar;
+    [SerializeField] private EvoProgressBar cureBar;
 
     [Header("Chaos Bar")]
     [SerializeField] private Slider chaosBar;
@@ -89,7 +90,7 @@ public class HUDController : MonoBehaviour
         if (txtPendingCandidates != null && recruitmentManager != null)
             txtPendingCandidates.text = $"Candidates: {recruitmentManager.PendingCount}";
 
-        if (cureBar) cureBar.value = gameState.CureNormalized;
+        if (cureBar) cureBar.Value = gameState.CureNormalized * 100f;
         if (chaosBar) chaosBar.value = gameState.ChaosNormalized;
 
         if (txtActiveMissions && missionManager)

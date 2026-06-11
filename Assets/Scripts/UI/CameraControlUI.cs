@@ -1,6 +1,8 @@
 // Assets/Scripts/UI/CameraZoomControlUI.cs
 using UnityEngine;
 using UnityEngine.UI;
+using EvoButton = Evo.UI.Button;
+using EvoSlider = Evo.UI.Slider;
 
 public class CameraZoomControlUI : MonoBehaviour
 {
@@ -9,10 +11,10 @@ public class CameraZoomControlUI : MonoBehaviour
     [SerializeField] private GameState gameState;
 
     [Header("Controls")]
-    [SerializeField] private Slider zoomSlider;
-    [SerializeField] private Button btnBase;
-    [SerializeField] private Button btnTopView;
-    [SerializeField] private Button btnMapView;
+    [SerializeField] private EvoSlider zoomSlider;
+    [SerializeField] private EvoButton btnBase;
+    [SerializeField] private EvoButton btnTopView;
+    [SerializeField] private EvoButton btnMapView;
 
     private void OnEnable()
     {
@@ -90,7 +92,7 @@ public class CameraZoomControlUI : MonoBehaviour
         if (viewManager == null || zoomSlider == null)
             return;
 
-        zoomSlider.SetValueWithoutNotify(viewManager.GetZoomNormalized());
+        zoomSlider.SetValueWithoutNotify(viewManager.GetZoomNormalized() * 100f);
     }
 
     private void RefreshInteractableState()

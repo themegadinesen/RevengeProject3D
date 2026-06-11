@@ -20,11 +20,15 @@ MonoBehaviour:
   requiredAGI: 2
   requiredDomain: 1
   requiredBuilding: {fileID: 11400000, guid: 5dd505c30598afa4bb057867242c117e, type: 2}
-  duration: 30
+  duration: 40
   behavior: 0
+  specialReward: 0
+  rewardCandidate: {fileID: 0}
   chaosOnSuccess: 15
+  heatOnSuccess: 8
   cureOnSuccess: 0
   moneyOnSuccess: 80
   chaosOnFailure: 0
+  heatOnFailure: 12
   cureOnFailure: 20
   agentsLostOnFailure: 1
